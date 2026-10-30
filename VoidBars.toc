@@ -1,0 +1,24 @@
+## Interface: 120105
+## Title: VoidBars
+## Notes: Clean, fast action bars that take over Blizzard's in your current layout, plus bars that fill themselves with your consumables, travel and professions.
+## Author: VoidUI
+## Version: 1.0.0
+## SavedVariables: VoidBarsDB
+## SavedVariablesPerCharacter: VoidBarsCharDB, VoidHubCharDB
+## IconTexture: Interface\Icons\Spell_Shadow_Shadesofdarkness
+
+Core.lua
+Button.lua
+Bars.lua
+Bindings.lua
+Profiles.lua
+PetStance.lua
+Markers.lua
+SmartBars.lua
+Presets.lua
+SpellDamage.lua
+Suggest.lua
+BarSettings.lua
+Keybind.lua
+Options.lua
+VoidHubBundle.lua
