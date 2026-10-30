@@ -18,7 +18,8 @@ First public release.
 
 ### Smart bars
 - Consumables, Travel and Professions bars that fill themselves from your bags and spellbook. Shift + right-click hides a button.
-- Pets bar for pet classes: hunter Call Pet per stable slot, Revive / Mend / Dismiss Pet; warlock demon summons; Frost mage Water Elemental.
+- Pets bar for pet classes: hunter Call Pet per stable slot, Revive / Mend / Dismiss Pet; warlock demon summons; Frost mage Water Elemental. It starts above the Travel bar.
+- Random bar: an empty bar for anything you drag onto it (mounts, toys, items, spells). It starts under the Travel bar.
 
 ### Keys and setup
 - Keybind mode: hover a button, press a key.

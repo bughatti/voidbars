@@ -130,6 +130,12 @@ function VB:ApplyPreset(name)
     pets.enabled = true
     pets.x, pets.y = x0 + rowW + GAP, yTop + GAP + petH
 
+    -- Random (whatever the player drags on): under Travel, mirroring the markers on the left.
+    local _, travH = SmartSize("travel")
+    local rnd = self:BarConfig("random")
+    rnd.enabled, rnd.size = true, 28
+    rnd.x, rnd.y = x0 + rowW + GAP, yTop - travH - GAP
+
     -- Pet bar one row above Consumables' row, stance bar (forms / stealth) above that.
     PlaceUtilityRows(x0, rowW, cons.y)
     VoidBarsCharDB.utilRowsV2 = true   -- already the new spot: no migration

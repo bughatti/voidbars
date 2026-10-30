@@ -12,6 +12,7 @@
 -- a plain right-click uses it, like left-click.
 -- Travel: hearthstone, class teleport, Teleport Home, Switch Flight Style,
 -- random mount + your own list of mounts/toys/items/spells (drag to add).
+-- Random: only your own list, whatever you drag onto it.
 --
 -- Buttons are secure "item" buttons. Which item each one holds is a secure
 -- attribute, so the bar is rebuilt out of combat; counts and cooldowns keep
@@ -640,6 +641,14 @@ function VB:AddCursorTo(barKey, label)
 end
 
 
+-- Random: nothing automatic, only what you drag onto it (the user, 2026-10-30: "a bar
+-- called random for people to put whatever in").
+function VB:CollectRandom()
+    local list, _, addCurated = NewCollector("random")
+    addCurated()
+    return list, false
+end
+
 local houseEv = CreateFrame("Frame")
 houseEv:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
 houseEv:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -855,7 +864,11 @@ local SMART_DEFS = {
     { key = "consumables", label = "Consumables", kind = "smart", collect = "CollectConsumables", y = 305, side = "left" },
     { key = "travel",      label = "Travel",      kind = "smart", collect = "CollectTravel",      y = 350, curated = true, side = "right" },
     { key = "professions", label = "Professions", kind = "smart", collect = "CollectProfessions", y = 395, curated = true, side = "left" },
-    { key = "pets",        label = "Pets",        kind = "smart", collect = "CollectPets",        y = 305, side = "right" },
+    -- near: a bar's first spot, when it arrives after the layout was set, is next to that bar
+    { key = "pets",        label = "Pets",        kind = "smart", collect = "CollectPets",        y = 305, side = "right",
+      near = { key = "travel", above = true } },
+    { key = "random",      label = "Random",      kind = "smart", collect = "CollectRandom",      y = 305, curated = true, side = "right",
+      near = { key = "travel" } },
 }
 
 function VB:CreateSmartBars()
@@ -975,9 +988,23 @@ function VB:LayoutSmartBar(bar)
         if cfg.x then cfg.x = cfg.x - (size + spacing) end
     end
     if self.Outline then self:Outline(bar) end
+    -- once: a Pets bar placed before it had a neighbour landed at the fixed y, far above
+    -- Travel (the user's hunter, 2026-10-30); one never moved goes next to Travel
+    if bar.def.key == "pets" and not cfg.nearV2 then
+        cfg.nearV2 = true
+        if cfg.y == bar.def.y then cfg.x = nil end
+    end
     if not cfg.x then
-        cfg.x = (UIParent:GetWidth() - bar:GetWidth()) / 2
-        cfg.y = bar.def.y or 305   -- above the usual bottom-center bars; move it in move mode
+        local near = bar.def.near
+        local nc, nb = near and self:BarConfig(near.key), near and self.bars[near.key]
+        if nc and nc.x and nc.y and nb and (nb:GetWidth() or 0) > 1 then
+            local gap = self.GROUP_GAP or 14
+            cfg.x = nc.x
+            cfg.y = near.above and (nc.y + gap + bar:GetHeight()) or (nc.y - nb:GetHeight() - gap)
+        else
+            cfg.x = (UIParent:GetWidth() - bar:GetWidth()) / 2
+            cfg.y = bar.def.y or 305   -- above the usual bottom-center bars; move it in move mode
+        end
     end
     self:SnapToBlock(bar, cfg, onLeft)
     self:NudgeOffBars(bar, cfg, onLeft)

@@ -197,6 +197,11 @@ function VB:BuildOptions()
         VB.HiddenSet("professions"); VoidBarsDB.hiddenBy.professions = {}
         SmartRefresh()
     end, "Brings back the automatic profession buttons you Shift+right-clicked away.")
+    BarCheck("random", "enabled", "Show the Random bar",
+        "An empty bar for anything you like: drag mounts, toys, items or spells onto it (Shift+right-click removes).", true)
+    BarCheck("random", "fade", "Fade the Random bar out of combat", nil, false)
+    BarSlider("random", "size", "Random button size", 36, 20, 64, 1)
+    BarSlider("random", "cols", "Random buttons per row", 12, 1, 12, 1)
     Button("Hidden consumables", "Show all again", function()
         VoidBarsDB.hiddenItems = {}
         VB:Print("all hidden items are back on the smart bars.")
