@@ -4,8 +4,8 @@
 --
 -- Consumables (one button per JOB, best version only, current expansion only):
 --   healthstone, health potion, combat potion, flask/phial, buff food, feast,
---   weapon oil/stone, augment rune, vantus rune (raids only); while leveling
---   also plain food (eat) and water (drink, mana users) to recover between pulls;
+--   weapon oil/stone, augment rune, vantus rune (raids only); also plain food (eat)
+--   and water (drink, mana users) to recover between pulls, mage food included;
 --   plus one recovery spell you know (Cannibalize, Gift of the Naaru, ...) and your
 --   class's group buff (Mark of the Wild, Arcane Intellect, ...), first on the bar.
 -- Shift+right-click a button to hide that item from the bar for good (reset in options);
@@ -27,7 +27,9 @@ local MAX_BUTTONS = 12
 
 local HEALTHSTONES = { [5512] = true, [224464] = true }
 
-local JOB_ORDER = { "buff", "healthstone", "health", "mana", "combat", "flask", "food", "feast", "eat", "drink", "recover", "oil", "rune", "vantus" }
+-- eat / drink go last: a bar holds 12 buttons, so with every job stocked it's plain food
+-- that drops off, never a raid flask or rune.
+local JOB_ORDER = { "buff", "healthstone", "health", "mana", "combat", "flask", "food", "feast", "recover", "oil", "rune", "vantus", "eat", "drink" }
 
 -- Class GROUP buffs: cast before the pull / after a wipe, out of combat, so they sit with
 -- the consumables (the player, 2026-10-27: "the druid has a buff... shouldn't it be on the
@@ -89,10 +91,12 @@ local function Classify(itemID)
     -- At max level only current-expansion items count (no old leveling food in
     -- M+). While leveling, anything usable at your level does; the best one
     -- wins by item level below.
-    local leveling = GetMaxLevelForPlayerExpansion and UnitLevel("player") < GetMaxLevelForPlayerExpansion()
-    if not leveling and expac < CurrentExpansion() then return nil end
-    if minLevel and minLevel > UnitLevel("player") then return nil end
+    -- Mage food (Conjured Mana Bun) is an old item but the best free food at any level.
     local lname = name:lower()
+    local conjured = subID == SUB.Fooddrink and lname:find("^conjured")
+    local leveling = GetMaxLevelForPlayerExpansion and UnitLevel("player") < GetMaxLevelForPlayerExpansion()
+    if not leveling and not conjured and expac < CurrentExpansion() then return nil end
+    if minLevel and minLevel > UnitLevel("player") then return nil end
     if subID == SUB.Potion then
         local txt, ready = UseText(itemID)
         if not ready then return nil, true end
@@ -112,7 +116,7 @@ local function Classify(itemID)
         if not ready then return nil, true end
         if lname:find("feast") or txt:find("set out") or txt:find("feast") then return "feast" end
         if txt:find("well fed") then return "food" end
-        -- plain food / water (no buff): eat / drink slots, only while leveling (JobWanted).
+        -- plain food / water (no buff): eat / drink slots, to recover between pulls.
         -- Food that restores both (Bobbing Apple) is also a drink candidate.
         local hp, mp = txt:find("restores.-health"), txt:find("restores.-mana")
         if hp then return "eat", nil, mp and "drink" or nil end
@@ -143,11 +147,8 @@ end
 
 -- Is this job wanted where the player is right now?
 local function JobWanted(job)
-    if job == "eat" or job == "drink" then   -- leveling only: at max level it's buff food
-        local max = GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()
-        if max and UnitLevel("player") >= max then return false end
-        if job == "eat" then return true end
-    end
+    -- eat / drink at max level too: buff food is for the pull, not for topping off between
+    -- packs (the player, 2026-10-30: "i am not going to constantly use harandar celebration to heal")
     if job == "mana" or job == "drink" then   -- only for characters with a mana pool
         return (UnitPowerMax("player", Enum.PowerType.Mana) or 0) > 0
     end

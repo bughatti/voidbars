@@ -169,7 +169,7 @@ function VB:BuildOptions()
         Settings.CreateSlider(category, s, o, tip)
     end
     BarCheck("consumables", "enabled", "Show the Consumables bar",
-        "Healthstone, potions, flask, buff food, feast, oil, augment rune (vantus in raids): best current-expansion version of each, from your bags. While leveling also plain food and water, to recover between pulls. Plus a recovery spell you know (Cannibalize, Gift of the Naaru...)", true)
+        "Healthstone, potions, flask, buff food, feast, oil, augment rune (vantus in raids): best current-expansion version of each, from your bags. Also plain food and water (mage food too), to recover between pulls. Plus a recovery spell you know (Cannibalize, Gift of the Naaru...)", true)
     BarCheck("consumables", "fade", "Fade the Consumables bar out of combat", nil, false)
     BarSlider("consumables", "size", "Consumables button size", 36, 20, 64, 1)
     BarSlider("consumables", "cols", "Consumables buttons per row", 12, 1, 12, 1)
