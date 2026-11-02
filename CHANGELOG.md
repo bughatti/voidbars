@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.2] — 2026-11-01
+
+### Changed
+- **Void hub icon:** the list of Void addons is up to date (adds VoidGather and VoidSweep, refreshed descriptions).
+
 ## [1.0.1] — 2026-10-30
 - The Consumables bar keeps plain food and water at max level, not only while leveling, so you can top off between pulls without spending buff food. Mage food (Conjured Mana Bun) counts as well. They sit at the end of the bar.
 
