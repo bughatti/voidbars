@@ -72,6 +72,7 @@ These fill themselves and never use one of your action slots:
 
 ## Good to Know
 
+- **Settings are per character.** Each character keeps its own VoidBars settings, and a new character starts with the settings of the one you played last, so nothing resets when you update. Right-click the Void hub icon by your minimap and pick **Copy settings from...** to take another character's settings for one Void addon or all of them. That now includes the look (keybinds shown, colors, glow, fade opacity).
 - **Bars only move, change size or swap spells out of combat** — that's the game's rule for action bars. Settings changed mid-fight are applied as soon as combat ends; presets, profiles and suggestions just ask you to try again after combat.
 - **Logging in or reloading mid-fight** — Blizzard's bars show until combat ends (a pet that's still fighting counts), then VoidBars takes over. It tells you so in chat.
 - **After every fight** VoidBars checks its bars are still in charge and puts them back if something in the fight knocked them loose.
@@ -79,7 +80,7 @@ These fill themselves and never use one of your action slots:
 - **Hiding Blizzard's bars** (on by default) takes effect after a `/reload` when you change it.
 - **Made for English game clients.** Suggested spells and the smart bars (which potions, food and profession tools go where) read English spell names and tooltips. On other languages the bars work normally, but suggestions and smart-bar sorting may miss things, so arrange those yourself.
 - **Damage ranking needs the game's damage meter** (Options → Advanced → Damage Meter). Without it, suggestions fall back to cooldown order.
-- Layout, per-bar settings, and what you've added to or hidden from the Travel, Professions and Random bars are saved per character; the look (keybinds shown, colors, glow, fade opacity) is account-wide.
+- Layout, per-bar settings, and what you've added to or hidden from the Travel, Professions and Random bars are saved per character too.
 
 ---
 

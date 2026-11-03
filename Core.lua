@@ -31,7 +31,7 @@ VB.BAR_DEFS = {
     { key = "markers", label = "World markers", kind = "markers", count = 10 },
 }
 
--- Account-wide look & behaviour. Layout (which bars, where, how big) is per
+-- Look & behaviour (per character since 1.0.5, see the CharSettings note below). Layout (which bars, where, how big) is per
 -- character in VoidBarsCharDB because every character's bars differ.
 VB.DEFAULTS = {
     hideBlizzard   = true,   -- hide Blizzard's 8 action bars while VoidBars is on
@@ -45,6 +45,14 @@ VB.DEFAULTS = {
     procGlow       = true,
     fadeAlpha      = 0,      -- alpha of a faded bar (0 = invisible until mouseover)
 }
+
+-- The look above is per character too (CharSettings.lua), like the layout in
+-- VoidBarsCharDB. Shared layouts stay account-wide so any character can copy them.
+do
+    local keys = {}
+    for k in pairs(VB.DEFAULTS) do keys[#keys + 1] = k end
+    VB.CharSettings.Register(ADDON, "VoidBarsDB", keys)
+end
 
 VB.COLOR = {
     accent     = CreateColor(0.00, 0.78, 1.00),  -- Void cyan
