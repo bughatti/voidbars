@@ -184,7 +184,7 @@ function VB:BuildOptions()
     BarSlider("travel", "size", "Travel button size", 36, 20, 64, 1)
     BarSlider("travel", "cols", "Travel buttons per row", 12, 1, 12, 1)
     Button("Hidden travel buttons", "Show all again", function()
-        VB.HiddenSet("travel"); VoidBarsDB.hiddenBy.travel = {}
+        VB.HiddenSet("travel"); VoidBarsCharDB.hiddenBy.travel = {}
         SmartRefresh()
     end, "Brings back the automatic travel buttons you Shift+right-clicked away.")
     BarCheck("professions", "enabled", "Show the Professions bar",
@@ -194,7 +194,7 @@ function VB:BuildOptions()
     BarSlider("professions", "size", "Professions button size", 36, 20, 64, 1)
     BarSlider("professions", "cols", "Professions buttons per row", 12, 1, 12, 1)
     Button("Hidden profession buttons", "Show all again", function()
-        VB.HiddenSet("professions"); VoidBarsDB.hiddenBy.professions = {}
+        VB.HiddenSet("professions"); VoidBarsCharDB.hiddenBy.professions = {}
         SmartRefresh()
     end, "Brings back the automatic profession buttons you Shift+right-clicked away.")
     BarCheck("random", "enabled", "Show the Random bar",
@@ -203,7 +203,7 @@ function VB:BuildOptions()
     BarSlider("random", "size", "Random button size", 36, 20, 64, 1)
     BarSlider("random", "cols", "Random buttons per row", 12, 1, 12, 1)
     Button("Hidden consumables", "Show all again", function()
-        VoidBarsDB.hiddenItems = {}
+        VoidBarsCharDB.hiddenItems = {}
         VB:Print("all hidden items are back on the smart bars.")
         SmartRefresh()
     end, "Items you Shift+right-clicked off a smart bar come back.")

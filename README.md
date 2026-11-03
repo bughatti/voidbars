@@ -79,7 +79,7 @@ These fill themselves and never use one of your action slots:
 - **Hiding Blizzard's bars** (on by default) takes effect after a `/reload` when you change it.
 - **Made for English game clients.** Suggested spells and the smart bars (which potions, food and profession tools go where) read English spell names and tooltips. On other languages the bars work normally, but suggestions and smart-bar sorting may miss things, so arrange those yourself.
 - **Damage ranking needs the game's damage meter** (Options → Advanced → Damage Meter). Without it, suggestions fall back to cooldown order.
-- Layout and per-bar settings are saved per character; the look (keybinds shown, colors, glow, fade opacity) is account-wide.
+- Layout, per-bar settings, and what you've added to or hidden from the Travel, Professions and Random bars are saved per character; the look (keybinds shown, colors, glow, fade opacity) is account-wide.
 
 ---
 

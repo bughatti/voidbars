@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.4] — 2026-11-02
+
+### Changed
+- **Each character keeps its own smart bars.** Mounts, toys and items you drag onto the Travel, Professions or Random bar, and buttons you Shift+right-click away, now stay with that character instead of showing on all of them. Nothing disappears when you update: each character starts with what it showed before, so remove anything that belonged to another character once and it stays gone.
+
 ## [1.0.3] — 2026-11-02
 
 ### Changed

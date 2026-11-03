@@ -161,7 +161,7 @@ end
 
 -- Best item per job from the bags.
 function VB:CollectConsumables()
-    local hidden = VoidBarsDB.hiddenItems or {}
+    local hidden = VoidBarsCharDB.hiddenItems or {}
     local best, pending = {}, false
     local seen = {}
     for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS or 4 do
@@ -228,7 +228,7 @@ end
 -- hides one, like a consumable.
 function VB:CollectPets()
     local _, class = UnitClass("player")
-    local hidden = VoidBarsDB.hiddenItems or {}
+    local hidden = VoidBarsCharDB.hiddenItems or {}
     local list = {}
     local function add(sid)
         if sid and not hidden["s" .. sid] and C_SpellBook.IsSpellKnownOrInSpellBook(sid) then
@@ -283,27 +283,55 @@ local function Known(spellID)
     return sb and sb.IsSpellKnownOrInSpellBook and sb.IsSpellKnownOrInSpellBook(spellID) or false
 end
 
--- The player's own list for a bar (travel, professions), account-wide.
-local function CuratedList(barKey)
-    VoidBarsDB.lists = VoidBarsDB.lists or {}
-    if barKey == "travel" and VoidBarsDB.travelList then   -- 0.3 data
-        VoidBarsDB.lists.travel = VoidBarsDB.lists.travel or VoidBarsDB.travelList
-        VoidBarsDB.travelList = nil
+-- The smart bars' lists, hidden buttons and first-run seeding are PER CHARACTER
+-- (VoidBarsCharDB). Up to 1.0.3 they were account-wide (VoidBarsDB), so a mount
+-- dragged on as one character showed on all of them (the player, 2026-11-02).
+local MOVED = { "lists", "hiddenBy", "hiddenItems", "travelSeeded", "professionsSeeded" }
+
+local function DeepCopy(t)
+    if type(t) ~= "table" then return t end
+    local o = {}
+    for k, v in pairs(t) do o[k] = DeepCopy(v) end
+    return o
+end
+
+-- ADDON_LOADED: a character that already used VoidBars keeps what it saw (a copy of
+-- the old shared lists, now its own); a new character starts fresh and seeds from
+-- its own bars. The shared copy stays for characters not logged in since.
+function VB:MigrateSmartLists()
+    local char, acct = VoidBarsCharDB, VoidBarsDB
+    if char.smartPerChar then return end
+    if acct.travelList then   -- 0.3 data
+        acct.lists = acct.lists or {}
+        acct.lists.travel = acct.lists.travel or acct.travelList
+        acct.travelList = nil
     end
-    VoidBarsDB.lists[barKey] = VoidBarsDB.lists[barKey] or {}
-    return VoidBarsDB.lists[barKey]
+    if acct.hiddenTravel then   -- 0.3 data
+        acct.hiddenBy = acct.hiddenBy or {}
+        acct.hiddenBy.travel = acct.hiddenTravel
+        acct.hiddenTravel = nil
+    end
+    if char.imported or char.bars then   -- used VoidBars before this version
+        for _, k in ipairs(MOVED) do
+            if char[k] == nil then char[k] = DeepCopy(acct[k]) end
+        end
+    end
+    char.smartPerChar = true
+end
+
+-- The player's own list for a bar (travel, professions, random), per character.
+local function CuratedList(barKey)
+    VoidBarsCharDB.lists = VoidBarsCharDB.lists or {}
+    VoidBarsCharDB.lists[barKey] = VoidBarsCharDB.lists[barKey] or {}
+    return VoidBarsCharDB.lists[barKey]
 end
 VB.CuratedList = CuratedList
 
 -- Automatic entries the player right-clicked away, per bar.
 local function HiddenSet(barKey)
-    VoidBarsDB.hiddenBy = VoidBarsDB.hiddenBy or {}
-    if barKey == "travel" and VoidBarsDB.hiddenTravel then   -- 0.3 data
-        VoidBarsDB.hiddenBy.travel = VoidBarsDB.hiddenTravel
-        VoidBarsDB.hiddenTravel = nil
-    end
-    VoidBarsDB.hiddenBy[barKey] = VoidBarsDB.hiddenBy[barKey] or {}
-    return VoidBarsDB.hiddenBy[barKey]
+    VoidBarsCharDB.hiddenBy = VoidBarsCharDB.hiddenBy or {}
+    VoidBarsCharDB.hiddenBy[barKey] = VoidBarsCharDB.hiddenBy[barKey] or {}
+    return VoidBarsCharDB.hiddenBy[barKey]
 end
 VB.HiddenSet = HiddenSet
 
@@ -371,7 +399,7 @@ end
 -- `pick(a)` returns an entry, or nil, true when the item's data isn't loaded
 -- yet -- then the seed stays open and runs again on the next rebuild.
 local function SeedList(barKey, flag, pick)
-    if VoidBarsDB[flag] then return end
+    if VoidBarsCharDB[flag] then return end
     local entries = ProfileEntries()
     if not entries then return end
     local list, have, waiting = CuratedList(barKey), {}, false
@@ -384,7 +412,7 @@ local function SeedList(barKey, flag, pick)
             list[#list + 1] = e
         end
     end
-    if not waiting then VoidBarsDB[flag] = true end
+    if not waiting then VoidBarsCharDB[flag] = true end
     return waiting
 end
 
@@ -812,10 +840,10 @@ local function RightClick(self, bar)
             HiddenSet(bar.def.key)[key] = true
         end
     else
-        VoidBarsDB.hiddenItems = VoidBarsDB.hiddenItems or {}
+        VoidBarsCharDB.hiddenItems = VoidBarsCharDB.hiddenItems or {}
         -- recovery spells use an "s<id>" key so a spell and an item with the same ID can't collide
         local spell = e.kind == "spell"
-        VoidBarsDB.hiddenItems[spell and ("s" .. e.id) or e.id] = true
+        VoidBarsCharDB.hiddenItems[spell and ("s" .. e.id) or e.id] = true
         VB:Print(("hid %s from the %s bar (Options -> VoidBars to bring hidden items back)."):format(
             (spell and C_Spell.GetSpellName(e.id)) or C_Item.GetItemNameByID(e.id) or "that item", bar.def.label))
     end

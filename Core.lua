@@ -136,6 +136,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         VoidBarsDB = VoidBarsDB or {}
         VoidBarsCharDB = VoidBarsCharDB or {}
+        VB:MigrateSmartLists()   -- smart bar lists: account-wide -> per character (SmartBars.lua)
     elseif event == "PLAYER_ENTERING_WORLD" then
         if not VB.initDone then
             VB.initDone = true
