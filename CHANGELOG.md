@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.6] — 2026-11-03
+
+### Added
+- **Macros on the Random, Travel and Professions bars.** Drag a macro from the macro window onto the bar. It shows the macro's icon, and for a `#showtooltip` macro the cooldown and tooltip of the spell or item it would cast. Macros are kept by name, so a renamed or deleted macro drops off the bar.
+
 ## [1.0.5] — 2026-11-02
 
 ### Changed

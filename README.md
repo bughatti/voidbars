@@ -29,10 +29,10 @@ VoidBars replaces Blizzard's eight action bars with flat, readable buttons and c
 ### Smart bars
 These fill themselves and never use one of your action slots:
 - **Consumables** — one button per job, best version you carry: healthstone, health potion, combat potion, flask or phial, food, feast, weapon oil or stone, augment rune, vantus rune (raids). It also adds plain food and water (mage food too) for topping off between pulls. It also holds your class's group buff (Mark of the Wild, Arcane Intellect, ...) and a recovery spell you know.
-- **Travel** — hearthstone, class teleports, Switch Flight Style and a random mount, plus anything you drag on: mounts, toys, items, spells
+- **Travel** — hearthstone, class teleports, Switch Flight Style and a random mount, plus anything you drag on: mounts, toys, items, spells, macros
 - **Professions** — every ability of each profession you have (crafting windows, Disenchant, Cooking Fire, Fishing, ...) and your profession gear
 - **Pets** (pet classes) — hunters get a Call Pet button for each stable slot that holds a pet, plus Revive, Mend and Dismiss Pet; warlocks get their demon summons; Frost mages their Water Elemental. Separate from Blizzard's pet bar, which keeps your pet's own abilities
-- **Random** — an empty bar for anything you like: drag on mounts, toys, items or spells
+- **Random** — an empty bar for anything you like: drag on mounts, toys, items, spells or macros (macros are kept by name, so a renamed or deleted macro drops off the bar)
 - **Every bar moves** — unlock in the options, drag any bar where you want it, and set its size and buttons per row
 - **Shift + right-click** hides a button from a smart bar for good; "Show all again" in the options brings the automatic ones back (a button you dragged on yourself is removed, so drag it back to restore it)
 

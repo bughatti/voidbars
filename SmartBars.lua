@@ -346,6 +346,8 @@ local function Owned(e)
         return Known(e.id)
     elseif e.kind == "item" then
         return (C_Item.GetItemCount(e.id) or 0) > 0 or C_Item.IsEquippedItem(e.id)
+    elseif e.kind == "macro" then
+        return (GetMacroIndexByName(e.id) or 0) > 0   -- deleted or renamed -> drops off
     end
     return true
 end
@@ -642,10 +644,20 @@ function VB:AddCursorTo(barKey, label)
         e = { kind = (PlayerHasToy(i1) and "toy" or "item"), id = i1 }
     elseif cType == "spell" then
         e = { kind = "spell", id = i3 }
+    elseif cType == "macro" then
+        -- saved by name: macro indexes shift when you add or delete macros
+        local name = GetMacroInfo(i1)
+        if name and GetMacroIndexByName(name) ~= i1 then
+            -- two macros with this name: the name would run the other one
+            ClearCursor()
+            self:Print(("two of your macros are named \"%s\". Rename one, then drag it on again."):format(name))
+            return
+        end
+        e = { kind = "macro", id = name }
     end
     ClearCursor()
     if not e or not e.id then
-        self:Print(("the %s bar takes mounts, toys, items and spells."):format(label or barKey))
+        self:Print(("the %s bar takes mounts, toys, items, spells and macros."):format(label or barKey))
         return
     end
     local key = EntryKey(e)
@@ -749,6 +761,25 @@ function Smart:UpdateVisual()
         end
         local ok, d = pcall(C_Spell.GetSpellCooldownDuration, sid)
         if ok and d then self.cooldown:SetCooldownFromDurationObject(d) else self.cooldown:Clear() end
+    elseif e.kind == "macro" then
+        local idx = GetMacroIndexByName(e.id) or 0
+        local _, icon = GetMacroInfo(e.id)
+        self.icon:SetTexture(icon)
+        -- #showtooltip macros: cooldown and usable tint of the spell / item they'd cast now
+        local sid = idx > 0 and GetMacroSpell(idx)
+        local link = idx > 0 and select(2, GetMacroItem(idx))
+        local itemID = link and not IsSecret(link) and C_Item.GetItemInfoInstant(link)
+        if sid and not IsSecret(sid) then
+            Tint(self, C_Spell.IsSpellUsable(sid))
+            local ok, d = pcall(C_Spell.GetSpellCooldownDuration, sid)
+            if ok and d then self.cooldown:SetCooldownFromDurationObject(d) else self.cooldown:Clear() end
+        elseif itemID then
+            Tint(self, C_Item.IsUsableItem(itemID))
+            SetCD(self.cooldown, C_Container.GetItemCooldown(itemID))
+        else
+            self.icon:SetVertexColor(1, 1, 1)
+            self.cooldown:Clear()
+        end
     elseif e.kind == "house" then
         self.icon:SetTexture(HOUSE_ICON)
         self.icon:SetVertexColor(1, 1, 1)
@@ -759,7 +790,7 @@ end
 -- Secure attributes for an entry (out of combat only).
 function Smart:Assign(e)
     self.entry = e
-    for _, a in ipairs({ "item", "toy", "spell", "macrotext", "house-neighborhood-guid", "house-guid", "house-plot-id" }) do
+    for _, a in ipairs({ "item", "toy", "spell", "macro", "macrotext", "house-neighborhood-guid", "house-guid", "house-plot-id" }) do
         self:SetAttribute(a, nil)
     end
     if not e or e.kind == "drop" then   -- the "+" square uses nothing
@@ -783,6 +814,9 @@ function Smart:Assign(e)
     elseif e.kind == "spell" then
         self:SetAttribute("type", "spell")
         self:SetAttribute("spell", e.id)
+    elseif e.kind == "macro" then
+        self:SetAttribute("type", "macro")
+        self:SetAttribute("macro", e.id)   -- RunMacro takes the name
     elseif e.kind == "house" and VB.house then
         self:SetAttribute("type", "teleporthome")
         self:SetAttribute("house-neighborhood-guid", VB.house.neighborhoodGUID)
@@ -798,11 +832,19 @@ local function ShowTooltip(self)
     GameTooltip_SetDefaultAnchor(GameTooltip, self)
     if e.kind == "drop" then
         GameTooltip:SetText(("Add to the %s bar"):format(self:GetParent().def.label:lower()))
-        GameTooltip:AddLine("Drag a mount, toy, item or spell here", 0.6, 0.6, 0.6)
+        GameTooltip:AddLine("Drag a mount, toy, item, spell or macro here", 0.6, 0.6, 0.6)
         GameTooltip:Show()
         return
     end
-    if e.kind == "item" then GameTooltip:SetItemByID(e.id)
+    if e.kind == "macro" then
+        local idx = GetMacroIndexByName(e.id) or 0
+        local sid = idx > 0 and GetMacroSpell(idx)
+        local link = idx > 0 and select(2, GetMacroItem(idx))
+        if sid and not IsSecret(sid) then GameTooltip:SetSpellByID(sid)
+        elseif link and not IsSecret(link) then GameTooltip:SetHyperlink(link)
+        else GameTooltip:SetText(e.id) end
+        GameTooltip:AddLine("Macro: " .. e.id, 0.6, 0.6, 0.6)
+    elseif e.kind == "item" then GameTooltip:SetItemByID(e.id)
     elseif e.kind == "toy" then GameTooltip:SetToyByItemID(e.id)
     elseif e.kind == "spell" then GameTooltip:SetSpellByID(e.id)
     elseif e.kind == "mount" then
@@ -818,7 +860,7 @@ local function ShowTooltip(self)
     if bar.def.curated then
         GameTooltip:AddLine(e.curated and ("Shift+Right-click: remove from the " .. bar.def.label:lower() .. " bar")
             or "Shift+Right-click: hide", 0.6, 0.6, 0.6)
-        GameTooltip:AddLine("Drag a mount, toy, item or spell here to add it", 0.6, 0.6, 0.6)
+        GameTooltip:AddLine("Drag a mount, toy, item, spell or macro here to add it", 0.6, 0.6, 0.6)
     else
         GameTooltip:AddLine("Shift+Right-click: hide this item from the bar", 0.6, 0.6, 0.6)
     end
@@ -1092,7 +1134,7 @@ local ev = CreateFrame("Frame")
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
     "PLAYER_REGEN_ENABLED", "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "PLAYER_LEVEL_UP",
     "SPELLS_CHANGED", "NEW_MOUNT_ADDED", "TOYS_UPDATED", "MOUNT_JOURNAL_USABILITY_CHANGED",
-    "SKILL_LINES_CHANGED", "PET_STABLE_UPDATE" }) do
+    "SKILL_LINES_CHANGED", "PET_STABLE_UPDATE", "UPDATE_MACROS" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event)
