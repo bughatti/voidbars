@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.7] — 2026-11-06
+
+### Fixed
+- **The food button picks the useful buff food.** It went by item level and stack size, so a fishing-skill fish could take the button over an attack power one. Buff food is now ranked by what the buff does for your character: your main stat (strength, agility or intellect, from your spec or class) first, then other combat stats, then stamina or spirit, and fishing or swim-speed buffs last.
+
+### Added
+- **WoW Forever** support.
+
 ## [1.0.6] — 2026-11-03
 
 ### Added

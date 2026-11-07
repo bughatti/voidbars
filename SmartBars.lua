@@ -139,6 +139,57 @@ local function Classify(itemID)
     return nil
 end
 
+-- What a buff food's buff is worth to THIS character, so a fishing-skill fish doesn't win
+-- over an attack-power one just by being the bigger stack (the user, 2026-11-06, WoW
+-- Forever). 30 = your main stat (attack power / strength / agility for physical fighters,
+-- intellect / spell power / healing for casters), 20 = secondary combat stats, 10 =
+-- stamina / spirit / regen, 0 = anything else (fishing skill, swim speed, ...).
+-- Your main stat: "str" / "agi" / "int", or nil when it can't be told (then all three
+-- count). Strength and agility are kept apart (Codex review: a hunter's agility food
+-- shouldn't tie with strength food).
+local CLASS_STAT = { WARRIOR = "str", DEATHKNIGHT = "str", ROGUE = "agi", HUNTER = "agi",
+    DEMONHUNTER = "agi", MAGE = "int", PRIEST = "int", WARLOCK = "int", EVOKER = "int" }
+local STAT_IDS = { [1] = "str", [2] = "agi", [4] = "int" }
+local function MainStat()
+    -- retail: the spec's primary stat, through C_SpecializationInfo (the old globals can be
+    -- turned off; Codex review)
+    local SI = C_SpecializationInfo
+    local getSpec = (SI and SI.GetSpecialization) or _G.GetSpecialization
+    local getInfo = (SI and SI.GetSpecializationInfo) or _G.GetSpecializationInfo
+    if getSpec and getInfo then
+        local ok, spec = pcall(getSpec)
+        if ok and type(spec) == "number" and spec > 0 then
+            local ok2, _, _, _, _, _, primary = pcall(getInfo, spec)
+            if ok2 and STAT_IDS[primary] then return STAT_IDS[primary] end
+        end
+    end
+    local _, class = UnitClass("player")
+    return CLASS_STAT[class]   -- nil for hybrids with no spec to go by (druid, paladin, shaman, monk)
+end
+local MAIN_WORDS = {
+    str = { "strength", "attack power" },
+    agi = { "agility", "attack power" },
+    int = { "intellect", "spell power", "spell damage", "healing done", "healing and damage" },
+}
+local SECONDARY_WORDS = { "critical", "haste", "mastery", "versatility", "hit rating", "chance to hit", "expertise" }
+local SURVIVAL_WORDS = { "stamina", "spirit", "mana every", "mana per", "health every", "armor" }
+local function anyOf(txt, words)
+    for _, w in ipairs(words) do if txt:find(w, 1, true) then return true end end
+    return false
+end
+local function FoodScore(itemID)
+    local txt = UseText(itemID)
+    local stat = MainStat()
+    if stat then
+        if anyOf(txt, MAIN_WORDS[stat]) then return 30 end
+    elseif anyOf(txt, MAIN_WORDS.str) or anyOf(txt, MAIN_WORDS.agi) or anyOf(txt, MAIN_WORDS.int) then
+        return 30
+    end
+    if anyOf(txt, SECONDARY_WORDS) then return 20 end
+    if anyOf(txt, SURVIVAL_WORDS) then return 10 end
+    return 0
+end
+
 local function Quality(itemID)
     local fn = C_TradeSkillUI and C_TradeSkillUI.GetItemCraftedQualityByItemInfo
     local ok, q = pcall(fn or function() end, itemID)
@@ -180,17 +231,21 @@ function VB:CollectConsumables()
                         ilvl = select(4, C_Item.GetItemInfo(id)) or 0,
                         fleeting = (C_Item.GetItemNameByID(id) or ""):lower():find("fleeting") and 1 or 0,
                         count = C_Item.GetItemCount(id, false, true) or 0,
+                        -- buff food: what the buff is worth to you comes first
+                        score = (job == "food") and FoodScore(id) or 0,
                     }
                     local cur = best[job]
-                    -- better = higher item level (newer/stronger, matters while
-                    -- leveling), then crafted quality, then free cauldron flask, then stack
-                    if not cur
-                        or cand.ilvl > cur.ilvl
-                        or (cand.ilvl == cur.ilvl and cand.q > cur.q)
-                        or (cand.ilvl == cur.ilvl and cand.q == cur.q and cand.fleeting > cur.fleeting)
-                        or (cand.ilvl == cur.ilvl and cand.q == cur.q and cand.fleeting == cur.fleeting and cand.count > cur.count) then
-                        best[job] = cand
-                    end
+                    -- better = the more useful buff (buff food), then higher item level
+                    -- (newer/stronger, matters while leveling), then crafted quality,
+                    -- then free cauldron flask, then stack
+                    local better
+                    if not cur then better = true
+                    elseif cand.score ~= cur.score then better = cand.score > cur.score
+                    elseif cand.ilvl ~= cur.ilvl then better = cand.ilvl > cur.ilvl
+                    elseif cand.q ~= cur.q then better = cand.q > cur.q
+                    elseif cand.fleeting ~= cur.fleeting then better = cand.fleeting > cur.fleeting
+                    else better = cand.count > cur.count end
+                    if better then best[job] = cand end
                 end
                 end
             end
