@@ -150,20 +150,37 @@ end
 local CLASS_STAT = { WARRIOR = "str", DEATHKNIGHT = "str", ROGUE = "agi", HUNTER = "agi",
     DEMONHUNTER = "agi", MAGE = "int", PRIEST = "int", WARLOCK = "int", EVOKER = "int" }
 local STAT_IDS = { [1] = "str", [2] = "agi", [4] = "int" }
+-- The main stats each class's specs can have: a spec answer outside the set is wrong
+-- (Demon Hunter includes Devourer, the intellect spec; Codex review).
+local CLASS_STATS = {
+    WARRIOR = { str = true }, DEATHKNIGHT = { str = true }, PALADIN = { str = true, int = true },
+    ROGUE = { agi = true }, HUNTER = { agi = true }, DEMONHUNTER = { agi = true, int = true },
+    MONK = { agi = true, int = true }, DRUID = { agi = true, int = true }, SHAMAN = { agi = true, int = true },
+    MAGE = { int = true }, PRIEST = { int = true }, WARLOCK = { int = true }, EVOKER = { int = true },
+}
 local function MainStat()
-    -- retail: the spec's primary stat, through C_SpecializationInfo (the old globals can be
-    -- turned off; Codex review)
-    local SI = C_SpecializationInfo
-    local getSpec = (SI and SI.GetSpecialization) or _G.GetSpecialization
-    local getInfo = (SI and SI.GetSpecializationInfo) or _G.GetSpecializationInfo
-    if getSpec and getInfo then
-        local ok, spec = pcall(getSpec)
-        if ok and type(spec) == "number" and spec > 0 then
-            local ok2, _, _, _, _, _, primary = pcall(getInfo, spec)
-            if ok2 and STAT_IDS[primary] then return STAT_IDS[primary] end
+    local _, class = UnitClass("player")
+    -- WoW Forever: the spec data is a placeholder for its Classic-style characters (a rogue
+    -- reported spec 1 with intellect as main stat, 2026-11-07, so attack power food lost to a
+    -- fishing fish again). Go by class there.
+    local forever = (select(4, GetBuildInfo()) or 0) < 100000
+    if not forever then
+        -- retail: the spec's primary stat, through C_SpecializationInfo (the old globals can
+        -- be turned off; Codex review)
+        local SI = C_SpecializationInfo
+        local getSpec = (SI and SI.GetSpecialization) or _G.GetSpecialization
+        local getInfo = (SI and SI.GetSpecializationInfo) or _G.GetSpecializationInfo
+        if getSpec and getInfo then
+            local ok, spec = pcall(getSpec)
+            if ok and type(spec) == "number" and spec > 0 then
+                local ok2, _, _, _, _, _, primary = pcall(getInfo, spec)
+                local stat = ok2 and STAT_IDS[primary]
+                -- never trust an answer the class can't have (an intellect rogue)
+                local allowed = CLASS_STATS[class]
+                if stat and (not allowed or allowed[stat]) then return stat end
+            end
         end
     end
-    local _, class = UnitClass("player")
     return CLASS_STAT[class]   -- nil for hybrids with no spec to go by (druid, paladin, shaman, monk)
 end
 local MAIN_WORDS = {

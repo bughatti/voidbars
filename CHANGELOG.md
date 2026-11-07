@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.8] — 2026-11-07
+
+### Fixed
+- **WoW Forever: the food button picked the fishing fish again.** Forever's spec data is a placeholder that reports every character as an intellect caster, so attack power food stopped counting as your main stat. On Forever, VoidBars now goes by your class. On retail, a spec answer your class can't have is ignored.
+
 ## [1.0.7] — 2026-11-06
 
 ### Fixed
