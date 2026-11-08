@@ -143,6 +143,7 @@ f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         VoidBarsDB = VoidBarsDB or {}
+        VoidBarsDB.lockProbe = nil   -- the 2026-11-07 lockdown probe's data
         VoidBarsCharDB = VoidBarsCharDB or {}
         VB:MigrateSmartLists()   -- smart bar lists: account-wide -> per character (SmartBars.lua)
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -166,8 +167,20 @@ function VB:Init()
     self:CreateBars()
     if self.CreateSmartBars then self:CreateSmartBars() end
     if self.BuildOptions then self:BuildOptions() end
-    -- Edit Mode lays Blizzard's bars out during login; read that layout once it
-    -- has settled, then take over (first run only -- after that it's ours).
+    -- Edit Mode lays Blizzard's bars out during login. Only a run that READS that layout
+    -- (first run on a character, or a bar added in a newer version) has to wait for it to
+    -- settle. Every other load takes over right now: after a /reload mid-fight the game
+    -- has no combat lockdown up to PLAYER_ENTERING_WORLD and turns it on right after
+    -- (measured 2026-11-07), so the old 1-second wait landed in lockdown and the bars
+    -- vanished until the fight ended.
+    local readsLayout = not VoidBarsCharDB.imported
+    for _, def in ipairs(self.BAR_DEFS) do
+        if self:BarConfig(def.key).enabled == nil then readsLayout = true end
+    end
+    if not readsLayout and not InCombatLockdown() then
+        self:TakeOver()
+        return
+    end
     C_Timer.After(1, function()
         self:WaitNote()
         self:RunOutOfCombat("takeover", function() self:TakeOver() end)

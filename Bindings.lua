@@ -17,7 +17,6 @@
 local _, VB = ...
 
 local owner = CreateFrame("Frame", "VoidBarsBindingOwner", UIParent, "SecureHandlerStateTemplate")
-owner:Execute([[ binds = newtable() ]])
 
 -- Shared by the state handler and ApplyBindings.
 local APPLY = [[
@@ -28,8 +27,21 @@ local APPLY = [[
         end
     end
 ]]
-owner:SetAttribute("_onstate-petbattle", APPLY)
-RegisterStateDriver(owner, "petbattle", "[petbattle] on; off")
+
+-- The secure setup is blocked under combat lockdown, and a /reload mid-fight loads this
+-- file under it (2026-11-07: every Void addon's secure setup failed that way and the keys
+-- stayed dead all session). So it runs once, out of combat: now, or the first time the
+-- bindings are applied (always out of combat).
+local ownerReady
+local function setupOwner()
+    if ownerReady or InCombatLockdown() then return ownerReady end
+    owner:Execute([[ binds = newtable() ]])
+    owner:SetAttribute("_onstate-petbattle", APPLY)
+    RegisterStateDriver(owner, "petbattle", "[petbattle] on; off")
+    ownerReady = true
+    return true
+end
+setupOwner()
 
 local applied   -- signature of the binds currently set
 
@@ -70,6 +82,7 @@ end
 
 -- Out of combat only (callers use VB:RunOutOfCombat).
 function VB:ApplyBindings()
+    if not setupOwner() then return end
     local wanted, parts = {}, {}
     for _, bar in ipairs(self.bars) do
         local cfg = self:BarConfig(bar.def.key)

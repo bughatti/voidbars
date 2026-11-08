@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.9] — 2026-11-07
+
+- **Fixed: your bars vanished after a /reload in the middle of a fight** (Blizzard's bar showed until the fight ended). The game allows setting up bars while the UI loads, even mid-fight, and only locks that down right after the loading screen. VoidBars waited one extra second before taking over and landed in that lock. It now takes over at once (the wait is only needed the first time, when it copies Blizzard's layout). Tested with two reloads in a fight: the bars stayed.
+- **Fixed: the key-routing setup is safe when the UI loads under combat lockdown.**
+
 ## [1.0.8] — 2026-11-07
 
 ### Fixed
