@@ -1,5 +1,7 @@
 # VoidBars
 
+**Works on:** WoW Midnight · WoW Forever
+
 **Clean, fast action bars that take over Blizzard's in your current layout, plus bars that fill themselves with your consumables, travel, professions and pets.**
 
 VoidBars replaces Blizzard's eight action bars with flat, readable buttons and copies where your bars already are, so nothing moves on day one. It adds a pet bar, stance bar and world-marker bar, smart bars that fill themselves from your bags, spellbook and stable, a hover-and-press keybind mode, and saved profiles you can switch between. Want a fresh start? One click sets up a 1-7 + Shift 1-7 combat block and puts the right spells for your spec on it.
@@ -63,7 +65,7 @@ These fill themselves and never use one of your action slots:
 
 ## Getting Started
 
-1. Install with the CurseForge app, or copy the `VoidBars` folder into `World of Warcraft/_retail_/Interface/AddOns/`.
+1. Install with the CurseForge app, or copy the `VoidBars` folder into `World of Warcraft/_retail_/Interface/AddOns/` (WoW Forever: `_forever_/Interface/AddOns/`).
 2. Restart WoW or `/reload`.
 3. VoidBars copies your current bars and asks if you'd like the clean layout instead. Pick **Keep my bars** to stay as you are, or **Use the clean layout** for the 1-7 + Shift 1-7 block with suggested spells.
 4. Type `/vbars` (or Esc → Options → AddOns → VoidBars) for everything else.
@@ -86,8 +88,8 @@ These fill themselves and never use one of your action slots:
 
 ## Compatibility
 
-- **WoW 12.1.5** (Midnight Season 2)
-- **WoW Forever** supported too
+- **WoW Midnight** 12.1.5 (Season 2)
+- **WoW Forever**
 - Standalone — nothing else to install
 - Turn off any other action bar addon first, so two addons aren't fighting over the same bars
 
