@@ -2,7 +2,7 @@
 ## Title: VoidBars
 ## Notes: Clean, fast action bars that take over Blizzard's in your current layout, plus bars that fill themselves with your consumables, travel and professions.
 ## Author: VoidUI
-## Version: 1.0.9
+## Version: 1.0.10
 ## SavedVariables: VoidBarsDB
 ## SavedVariablesPerCharacter: VoidBarsCharDB, VoidHubCharDB
 ## IconTexture: Interface\Icons\Spell_Shadow_Shadesofdarkness

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.10] — 2026-11-09
+
+- **Fixed: box borders missing a side.** Depending on where a window sat on screen, its left, right or bottom line could vanish. Borders are now exactly one screen pixel and can't round away.
+
 ## [1.0.9] — 2026-11-07
 
 - **Fixed: your bars vanished after a /reload in the middle of a fight** (Blizzard's bar showed until the fight ended). The game allows setting up bars while the UI loads, even mid-fight, and only locks that down right after the loading screen. VoidBars waited one extra second before taking over and landed in that lock. It now takes over at once (the wait is only needed the first time, when it copies Blizzard's layout). Tested with two reloads in a fight: the bars stayed.
