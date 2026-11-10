@@ -122,6 +122,40 @@ local CLASS = {
     },
 }
 
+-- WoW Forever runs Classic classes: Wind Shear / Rebuke / Skull Bash don't exist there, so
+-- key 3 stayed empty. There these lists replace the class's interrupt list (first one you
+-- know wins; empty = the class has none on Forever). Retail keeps the lists above.
+-- (Forever audit, 2026-11-10)
+local IS_FOREVER = (select(4, GetBuildInfo()) or 0) < 100000
+local FOREVER_INTERRUPT = {
+    SHAMAN = { "Earth Shock" },
+    WARRIOR = { "Pummel", "Shield Bash" },
+    ROGUE = { "Kick" },
+    MAGE = { "Counterspell" },
+    PRIEST = { "Silence" },
+    WARLOCK = { "Spell Lock" },
+    PALADIN = {}, DRUID = {}, HUNTER = {},
+}
+
+-- Forever role (the spec API is a placeholder there and GetSpecializationRole doesn't
+-- exist): the group role, else a tank stance / form / aura. nil when unknown.
+-- (Forever audit, 2026-11-10)
+local function ForeverRole()
+    local r = UnitGroupRolesAssigned and UnitGroupRolesAssigned("player")
+    if r and r ~= "NONE" then return r end
+    local _, class = UnitClass("player")
+    if class == "WARRIOR" or class == "DRUID" then
+        local idx = GetShapeshiftForm and GetShapeshiftForm()
+        local sid = idx and idx > 0 and select(4, GetShapeshiftFormInfo(idx))
+        local nm = sid and C_Spell.GetSpellName(sid)
+        if nm == "Defensive Stance" or nm == "Bear Form" or nm == "Dire Bear Form" then return "TANK" end
+    elseif class == "PALADIN" and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", "Righteous Fury", "HELPFUL")
+        if ok and aura then return "TANK" end
+    end
+    return nil
+end
+
 -- Same "do you have it" test VoidSequencer uses: known directly or via its base spell
 -- (talent overrides).
 local function KnownID(name)
@@ -405,15 +439,26 @@ function VB:BuildSuggestion(fresh)
 
     -- interrupt (always key 3); tanks: taunt first; then the class list and other talents,
     -- sorted into groups (damage by rank, the rest keep their list order)
+    local role
+    if IS_FOREVER then
+        role = ForeverRole()   -- spec role is empty there (Forever audit, 2026-11-10)
+    else
+        local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
+        local getRole = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationRole) or GetSpecializationRole
+        local si = getSpec and getSpec()
+        role = si and getRole and getRole(si)
+    end
     local interrupt
-    for _, nm in ipairs(def.interrupt or {}) do
+    local interrupts = def.interrupt or {}
+    if IS_FOREVER and FOREVER_INTERRUPT[class] then   -- (Forever audit, 2026-11-10)
+        interrupts = FOREVER_INTERRUPT[class]
+        -- a Classic tank warrior sits in Defensive Stance, where Pummel can't be used
+        if class == "WARRIOR" and role == "TANK" then interrupts = { "Shield Bash", "Pummel" } end
+    end
+    for _, nm in ipairs(interrupts) do
         local id = usable(nm)
         if id then interrupt = { name = C_Spell.GetSpellName(id) or nm, id = id } break end
     end
-    local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
-    local getRole = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationRole) or GetSpecializationRole
-    local si = getSpec and getSpec()
-    local role = si and getRole and getRole(si)
     local queue = {}
     -- mainOnly: a spellbook spell, kept only when it's a main (top-row) button.
     local function add(nm, group, mainOnly)

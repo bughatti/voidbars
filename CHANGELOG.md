@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.11] — 2026-11-10
+
+### Fixed (WoW Forever)
+- **Key 3 interrupt** with Classic spells (Earth Shock, Pummel / Shield Bash, Kick, Counterspell ...), and tank / healer suggestions follow your group role or stance.
+
 ## [1.0.10] — 2026-11-09
 
 - **Fixed: box borders missing a side.** Depending on where a window sat on screen, its left, right or bottom line could vanish. Borders are now exactly one screen pixel and can't round away.
