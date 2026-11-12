@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.12] — 2026-11-12
+
+- **Bandages on the consumables bar.** The best bandage you can use (your First Aid skill is high enough for it) gets a button right after the health potion.
+- **The bar settings window can be dragged and stays where you put it**, even after a restart.
+- **Void hub button:** left-click opens one panel with all your Void addons by name, grouped, each with its own on/off switches (it replaces the ring of icons), with a background slider. The hub's info window now stays where you put it.
+
 ## [1.0.11] — 2026-11-10
 
 ### Fixed (WoW Forever)

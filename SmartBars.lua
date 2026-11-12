@@ -3,7 +3,7 @@
 -- of action slots (they never use any of the 180 server-side slots).
 --
 -- Consumables (one button per JOB, best version only, current expansion only):
---   healthstone, health potion, combat potion, flask/phial, buff food, feast,
+--   healthstone, health potion, bandage, combat potion, flask/phial, buff food, feast,
 --   weapon oil/stone, augment rune, vantus rune (raids only); also plain food (eat)
 --   and water (drink, mana users) to recover between pulls, mage food included;
 --   plus one recovery spell you know (Cannibalize, Gift of the Naaru, ...) and your
@@ -29,7 +29,7 @@ local HEALTHSTONES = { [5512] = true, [224464] = true }
 
 -- eat / drink go last: a bar holds 12 buttons, so with every job stocked it's plain food
 -- that drops off, never a raid flask or rune.
-local JOB_ORDER = { "buff", "healthstone", "health", "mana", "combat", "flask", "food", "feast", "recover", "oil", "rune", "vantus", "eat", "drink" }
+local JOB_ORDER = { "buff", "healthstone", "health", "bandage", "mana", "combat", "flask", "food", "feast", "recover", "oil", "rune", "vantus", "eat", "drink" }
 
 -- Class GROUP buffs: cast before the pull / after a wipe, out of combat, so they sit with
 -- the consumables (the player, 2026-10-27: "the druid has a buff... shouldn't it be on the
@@ -74,6 +74,22 @@ local function UseText(itemID)
     return table.concat(parts, "\n"):lower(), true
 end
 
+-- A red "Requires ..." line on the item's tooltip: this character can't use it yet (a Heavy
+-- Silk Bandage before First Aid 150). The game colours an unmet requirement red on every
+-- client, so no skill lookup is needed. nil = tooltip not loaded yet.
+local function UnmetRequirement(itemID)
+    local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
+    if not ok or not data or not data.lines or #data.lines < 2 then return nil end
+    for _, line in ipairs(data.lines) do
+        local t, c = line.leftText, line.leftColor
+        if t and not IsSecret(t) and t:find("^Requires") and c and c.r and c.g
+            and c.r > 0.9 and c.g < 0.3 then
+            return true
+        end
+    end
+    return false
+end
+
 local function CurrentExpansion()
     return LE_EXPANSION_LEVEL_CURRENT or (GetExpansionLevel and GetExpansionLevel()) or 0
 end
@@ -109,6 +125,12 @@ local function Classify(itemID)
             return "combat"
         end
         return nil
+    elseif subID == SUB.Bandage then
+        -- the user, 2026-11-12: "why is bandages not in the bar with the potions and food"
+        local unmet = UnmetRequirement(itemID)
+        if unmet == nil then return nil, true end
+        if unmet then return nil end
+        return "bandage"
     elseif subID == SUB.Flasksphials then
         return "flask"
     elseif subID == SUB.Fooddrink then
