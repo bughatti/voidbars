@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] — 2026-11-13
+
+- **WoW Forever: plain food keeps its own spot on the consumables bar.** On Forever most cooked food makes you well fed (Mithril Head Trout: +20 attack power), and that's the food you eat once for the buff, not between pulls. The bar now keeps a separate spot for plain food:
+  - **Raw fish that heal count as plain food** (Raw Sunscale Salmon, Raw Rockscale Cod...). The game files them as cooking materials, so the bar used to skip them.
+  - **Carrying none?** The spot shows the vendor food for your level, greyed out (at 35: Cured Ham Steak, Soft Banana Bread or Fine Aged Cheddar, 1,338 health). Click it for the way to the nearest vendor that sells it (with VoidGPS). Casters get the same for water.
+
 ## [1.0.13] — 2026-11-12
 
 - **Fixed: a side of a box could be missing**, e.g. the right line of the recipes box and its buttons when the game window is an odd number of pixels wide. Every Void box now always shows all four border lines.

@@ -23,6 +23,8 @@ local _, VB = ...
 local IsSecret = VB.IsSecret
 local SUB = Enum.ItemConsumableSubclass
 local CLASS_CONSUMABLE = Enum.ItemClass and Enum.ItemClass.Consumable or 0
+local CLASS_TRADEGOODS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
+local IS_FOREVER = (select(4, GetBuildInfo()) or 0) < 100000
 local MAX_BUTTONS = 12
 
 local HEALTHSTONES = { [5512] = true, [224464] = true }
@@ -103,7 +105,20 @@ local function Classify(itemID)
         C_Item.RequestLoadItemDataByID(itemID)
         return nil, true
     end
-    if classID ~= CLASS_CONSUMABLE then return nil end
+    if classID ~= CLASS_CONSUMABLE then
+        -- WoW Forever: raw fish (Raw Sunscale Salmon, Raw Rockscale Cod...) are cooking materials you can also
+        -- eat, with no buff: plain food for between pulls. The user, 2026-11-13: "i have fish in my bag that
+        -- is just reg food". Blizzard files them as Trade Goods, so the consumable check skipped them.
+        if IS_FOREVER and classID == CLASS_TRADEGOODS then
+            if minLevel and minLevel > UnitLevel("player") then return nil end
+            local txt, ready = UseText(itemID)
+            if not ready then return nil, true end
+            if txt:find("while eating") and txt:find("restores.-health") and not txt:find("well fed") then
+                return "eat"
+            end
+        end
+        return nil
+    end
     -- At max level only current-expansion items count (no old leveling food in
     -- M+). While leveling, anything usable at your level does; the best one
     -- wins by item level below.
@@ -249,6 +264,43 @@ local function JobWanted(job)
     return true
 end
 
+-- WoW Forever: plain vendor food and water by level, for the eat / drink spot when your bags hold none. The
+-- user, 2026-11-13: "we have an item that gives well fed, but i also need a spot for just normal food, im not
+-- gonna waste well fed food on grinding to heal between pulls". On Forever most cooked food is well fed
+-- (Mithril Head Trout: +20 attack power), and the trout was the only food in the bags, so no eat spot showed.
+-- Every item below is from Blizzard's Forever item data (checked 2026-11-13): no buff, sold by innkeepers and
+-- food vendors, and each tier restores more than the well-fed food of its level.
+local VENDOR_FOOD = {
+    eat = {
+        { 45, { 8952, 8950, 8932, 8953, 8948 } },   -- Roasted Quail, Homemade Cherry Pie, Alterac Swiss, Deep Fried Plantains, Dried King Bolete
+        { 35, { 4599, 4601, 3927, 4602 } },         -- Cured Ham Steak, Soft Banana Bread, Fine Aged Cheddar, Moon Harvest Pumpkin
+        { 25, { 3771, 4544, 1707 } },               -- Wild Hog Shank, Mulgore Spice Bread, Stormwind Brie
+        { 15, { 3770, 4542, 422 } },                -- Mutton Chop, Moist Cornbread, Dwarven Mild
+        { 5,  { 2287, 4541, 414 } },                -- Haunch of Meat, Freshly Baked Bread, Dalaran Sharp
+        { 1,  { 117, 4540 } },                      -- Tough Jerky, Tough Hunk of Bread
+    },
+    drink = {
+        { 45, { 8766 } }, { 35, { 1645 } }, { 25, { 1708 } },   -- Morning Glory Dew, Moonberry Juice, Sweet Nectar
+        { 15, { 1205 } }, { 5, { 1179 } }, { 1, { 159 } },      -- Melon Juice, Ice Cold Milk, Refreshing Spring Water
+    },
+}
+-- the item of your level's tier sold nearest to you (VoidGPS), else the tier's first; plus that vendor
+local function VendorFood(job)
+    local lvl = UnitLevel("player") or 1
+    local goods = _G.VoidGPS and _G.VoidGPS.Goods
+    for _, tier in ipairs(VENDOR_FOOD[job]) do
+        if lvl >= tier[1] then
+            local pick, vendor, yards
+            for _, id in ipairs(tier[2]) do
+                local ok, e = pcall(goods and goods.Get or function() end, goods, id)
+                local v = ok and e and e.vendors and e.vendors[1]
+                if v and v.yards and (not yards or v.yards < yards) then pick, vendor, yards = id, v, v.yards end
+            end
+            return pick or tier[2][1], vendor
+        end
+    end
+end
+
 -- Best item per job from the bags.
 function VB:CollectConsumables()
     local hidden = VoidBarsCharDB.hiddenItems or {}
@@ -286,6 +338,19 @@ function VB:CollectConsumables()
                     else better = cand.count > cur.count end
                     if better then best[job] = cand end
                 end
+                end
+            end
+        end
+    end
+    -- WoW Forever: no plain food / water in the bags -> the spot stays, greyed, showing what to buy; a click
+    -- routes you to the vendor (VendorFood above). Shift+right-click hides it like any item. Before the
+    -- one-button rule below, so a food that does both doesn't get a "buy water" spot next to it (Sol review).
+    if IS_FOREVER then
+        for _, job in ipairs({ "eat", "drink" }) do
+            if not best[job] and JobWanted(job) then
+                local id, vendor = VendorFood(job)
+                if id and not hidden[id] then
+                    best[job] = { kind = "item", id = id, job = job, missing = true, vendor = vendor }
                 end
             end
         end
@@ -887,7 +952,9 @@ function Smart:Assign(e)
     for _, a in ipairs({ "item", "toy", "spell", "macro", "macrotext", "house-neighborhood-guid", "house-guid", "house-plot-id" }) do
         self:SetAttribute(a, nil)
     end
-    if not e or e.kind == "drop" then   -- the "+" square uses nothing
+    -- the "+" square and a food you don't carry (Forever's plain-food spot) use nothing: the click routes
+    -- to a vendor instead (PostClick)
+    if not e or e.kind == "drop" or e.missing then
         self:SetAttribute("type", nil)
         if e then self:UpdateVisual() end
         return
@@ -938,7 +1005,19 @@ local function ShowTooltip(self)
         elseif link and not IsSecret(link) then GameTooltip:SetHyperlink(link)
         else GameTooltip:SetText(e.id) end
         GameTooltip:AddLine("Macro: " .. e.id, 0.6, 0.6, 0.6)
-    elseif e.kind == "item" then GameTooltip:SetItemByID(e.id)
+    elseif e.kind == "item" then
+        GameTooltip:SetItemByID(e.id)
+        if e.missing then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("None in your bags", 1, 0.35, 0.35)
+            GameTooltip:AddLine(e.job == "drink" and "Plain water restores mana between pulls."
+                or "Plain food heals between pulls, so your well-fed food is kept for when the buff counts.", 0.8, 0.8, 0.8, true)
+            if e.vendor then
+                GameTooltip:AddLine("Click: the way to the nearest vendor that sells it", 0.4, 1, 0.4, true)
+            else
+                GameTooltip:AddLine("Sold by innkeepers and food vendors.", 0.8, 0.8, 0.8, true)
+            end
+        end
     elseif e.kind == "toy" then GameTooltip:SetToyByItemID(e.id)
     elseif e.kind == "spell" then GameTooltip:SetSpellByID(e.id)
     elseif e.kind == "mount" then
@@ -998,6 +1077,11 @@ local function CreateSmartButton(bar, i)
     -- remove/hide, and never uses or casts.
     b:SetAttribute("shift-type2", "vbnoop")
     b.HotKey:SetText("")
+    -- was it a "buy this" spot when the click STARTED? Eating your last plain food can turn the button into
+    -- one between press and release, and that click must not also start a route (Sol review).
+    b:HookScript("PreClick", function(self, button, down)
+        if down then self.vbMissingClick = self.entry and self.entry.missing or nil end
+    end)
     b:HookScript("PostClick", function(self, button, down)
         self:SetChecked(false)
         -- release only: the button fires on press AND release, and the bar
@@ -1008,6 +1092,15 @@ local function CreateSmartButton(bar, i)
             if GetCursorInfo() then VB:AddCursorTo(bar.def.key, bar.def.label:lower()) end
         elseif button == "RightButton" and IsShiftKeyDown() then
             RightClick(self, bar)
+        elseif self.entry.missing and self.vbMissingClick then
+            -- a plain food / water you don't carry: the way to the nearest vendor that sells it (VoidGPS)
+            -- (looked up now: the nearest one from where you stand, not where the bar was last built)
+            local e, goods = self.entry, _G.VoidGPS and _G.VoidGPS.Goods
+            local name = C_Item.GetItemNameByID(e.id) or "food"
+            local ok, went = pcall(goods and goods.Go or function() end, goods, e.id)
+            if not (ok and went) then
+                VB:Print(("No %s in your bags: innkeepers and food vendors sell it."):format(name))
+            end
         end
     end)
     b:HookScript("OnEnter", ShowTooltip)
