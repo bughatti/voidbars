@@ -450,7 +450,24 @@ function VB:TakeOver()
         C_Timer.After(3, function()
             self:EnsureDefaultProfile()
             if self.RebuildSmartBars then self:RunOutOfCombat("smartlayout", function() self:RebuildSmartBars() end) end
-            if not InCombatLockdown() then StaticPopup_Show("VOIDBARS_FIRSTRUN") end
+            -- one question at a time: VoidScout's first-run boxes sit at screen center too, and
+            -- both popped up over each other on a fresh install (2026-11-16). Wait for them (and
+            -- for combat) to be done; give up after ~10 minutes.
+            local tries = 0
+            local function offer()
+                tries = tries + 1
+                local busy = InCombatLockdown()
+                for _, n in ipairs({ "VoidScout_ConsentDialog", "VoidScout_SimDialog" }) do
+                    local f = _G[n]
+                    if f and f:IsShown() then busy = true end
+                end
+                if busy then
+                    if tries < 300 then C_Timer.After(2, offer) end
+                    return
+                end
+                StaticPopup_Show("VOIDBARS_FIRSTRUN")
+            end
+            offer()
         end)
         return
     end

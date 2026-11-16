@@ -208,7 +208,17 @@ end
 -- branch below (key 1, skipped spells, fixed layouts, wording) asks this one question.
 local function SeqActive()
     local api = VoidSequencerAPI
-    return api ~= nil and (not api.IsEnabled or api.IsEnabled()) and true or false
+    if not (api ~= nil and (not api.IsEnabled or api.IsEnabled())) then return false end
+    -- ...and only when it has a rotation for this character: a WoW Forever Hunter with
+    -- VoidSequencer on had key 1 reserved and his spellbook ignored, so the clean layout
+    -- emptied his bars (the user's son's PC, 2026-11-16)
+    -- (HasRotation, not RotationSpells: that one is always empty on Forever, even for a Rogue
+    -- with a working FOREVER_ROGUE rotation; an older VoidSequencer without it keeps key 1)
+    if api.HasRotation then
+        local ok, has = pcall(api.HasRotation)
+        if ok and not has then return false end
+    end
+    return true
 end
 VB.SeqActive = SeqActive
 
@@ -287,7 +297,10 @@ local DEF_WORDS  = { "damage taken", "heal", "absorb", "immun", "dodge", "parry"
     "vanish", "threat", "enters? stealth", "entering stealth", "drop%a* combat" }
 local CC_WORDS   = { "stun", "incapacitat", "disorient", "fear", "silenc", "root", "knock", "blind", "sleep",
     "polymorph", "taunt", "slowing", "reduc%a* .-movement speed" }
-local DMG_WORDS  = { "deals? [%d,%.]+", "dealing", "inflict", "[%d,%.]+ %a+ damage", "[%d,%.]+ damage" }
+-- (Classic wording on WoW Forever: Raptor Strike / Heroic Strike "increases melee damage by 5",
+-- Auto Shot "automatically shoots the target"; both were left off a level-7 Hunter's keys)
+local DMG_WORDS  = { "deals? [%d,%.]+", "dealing", "inflict", "[%d,%.]+ %a+ damage", "[%d,%.]+ damage",
+    "damage by [%d,%.]+", "automatically shoots" }
 local MOVE_WORDS = { "movement speed", "teleport", "leap", "charges? to", "jump", "dash", "grappl", "pull yourself" }
 
 -- Without VoidSequencer the top row holds your main buttons. A spell is one if it does
@@ -483,7 +496,14 @@ function VB:BuildSuggestion(fresh)
     for _, nm in ipairs(def.list) do add(nm) end
     for _, nm in ipairs(TalentedActives()) do add(nm) end
     if not seq then
-        for _, nm in ipairs(SpellbookActives()) do add(nm, nil, true) end
+        -- WoW Forever: the class lists hold retail names, so the spellbook is the only source of a
+        -- Classic character's utility (Aspect of the Monkey): it gets the Shift row there too.
+        -- Tracking stays off the keys (Blizzard's minimap button does it).
+        for _, nm in ipairs(SpellbookActives()) do
+            if not (IS_FOREVER and (nm:find("^Track") or nm:find("Tracking$") or nm:find("^Find ") or nm:find("^Sense "))) then
+                add(nm, nil, not IS_FOREVER)
+            end
+        end
     end
     table.sort(queue, function(a, b)
         if a.group ~= b.group then return a.group < b.group end
@@ -561,6 +581,14 @@ end
 function VB:ApplySuggestion(fresh)
     if InCombatLockdown() then self:Print("can't change your bars in combat.") return end
     local plan, extra, skip = self:BuildSuggestion(fresh)
+    -- nothing found to put on the keys (spells not read yet, a class the lists don't know):
+    -- leave the bars as they are rather than clear them (2026-11-16, "0 placed" + empty bars)
+    local anything = false
+    for _, p in ipairs(plan) do if p.id or p.macro then anything = true break end end
+    if not anything then
+        self:Print("couldn't find your spells to suggest keys for yet, so your bars stay as they are.")
+        return
+    end
     self:SaveProfile("Before suggested", true)
     if self:EnsureBlockBindings() > 0 then self:ApplyBindings() end   -- keys the plan's labels promise
 
@@ -589,9 +617,9 @@ function VB:ApplySuggestion(fresh)
                 PlaceAction(p.slot)
                 placed = placed + 1
             end
-        elseif GetActionInfo(p.slot) then
-            PickupAction(p.slot)   -- nothing suggested for this key: empty it
         end
+        -- nothing suggested for this key: what's on it stays (it used to be emptied, which with
+        -- an empty suggestion cleared every key, 2026-11-16)
         ClearCursor()
     end
     -- 3) VoidSequencer's spells off every shown bar

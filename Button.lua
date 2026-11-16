@@ -199,6 +199,18 @@ function VB:ButtonsForSlot(slot)
     return bySlot[slot]
 end
 
+-- Range checks are ONE switch per slot, shared with Blizzard's buttons, and Blizzard's
+-- ActionButton OnHide turns it off (ActionBarButtonRangeCheckFrame:UnregisterFrame). Parking
+-- Blizzard's bars hides them all, so our slots stopped getting ACTION_RANGE_CHECK_UPDATE and
+-- nothing went red out of range (the user, 2026-11-16). Turn it back on for slots we show.
+if C_ActionBar and C_ActionBar.EnableActionRangeCheck then
+    hooksecurefunc(C_ActionBar, "EnableActionRangeCheck", function(slot, on)
+        if on or not slot then return end
+        local t = bySlot[slot]
+        if t and next(t) then pcall(C_ActionBar.EnableActionRangeCheck, slot, true) end
+    end)
+end
+
 ----------------------------------------------------------------------
 -- Visual updates
 ----------------------------------------------------------------------
@@ -219,6 +231,7 @@ function Button:UpdateAll()
     self:UpdateCount()
     self:UpdateCooldown()
     self:UpdateUsable()
+    if self.hasAction then self:UpdateRange() end
     self:UpdateChecked()
     self:UpdateHotkey()
     self:UpdateName()
@@ -276,6 +289,27 @@ function Button:UpdateCooldown()
     self.cooldown:SetHideCountdownNumbers(not VB:Get("showCountdown"))
 end
 
+-- The mount on this slot (mount journal id), or nil. Mounts sit on bars as "summonmount", as
+-- their spell, or as an item; the action's own usable flag stays true indoors.
+local MJ = C_MountJournal
+local function SlotMount(slot)
+    if not MJ then return nil end
+    local t, id = GetActionInfo(slot)
+    if IsSecret(t) or IsSecret(id) or not id then return nil end
+    if t == "summonmount" then return id end
+    local ok, m
+    if t == "spell" and MJ.GetMountFromSpell then ok, m = pcall(MJ.GetMountFromSpell, id)
+    elseif t == "item" and MJ.GetMountFromItem then
+        ok, m = pcall(MJ.GetMountFromItem, id)
+        -- an item that TEACHES a mount can be used indoors: only a mount you already have counts
+        if ok and m and not IsSecret(m) and MJ.GetMountInfoByID then
+            local ok2, _, _, _, _, _, _, _, _, _, _, collected = pcall(MJ.GetMountInfoByID, m)
+            if not (ok2 and collected == true) then return nil end
+        end
+    end
+    return ok and not IsSecret(m) and m or nil
+end
+
 -- usable/noMana come from IsUsableAction or the ACTION_USABLE_CHANGED event.
 function Button:UpdateUsable(usable, noMana)
     if not self.hasAction then return end
@@ -283,11 +317,26 @@ function Button:UpdateUsable(usable, noMana)
         usable, noMana = C_ActionBar.IsUsableAction(self.action)
     end
     if IsSecret(usable) or IsSecret(noMana) then return end
+    -- a mount where you can't ride (indoors, no-mount zones): grey, like a spell you can't cast
+    -- (not while mounted: the same button gets you off)
+    if usable and MJ and MJ.GetMountUsabilityByID and not IsMounted() then
+        local m = SlotMount(self.action)
+        if m and m ~= 0 then
+            local ok, can = pcall(MJ.GetMountUsabilityByID, m, true)
+            if ok and can == false then usable, noMana = false, false end
+        end
+    end
     self.usable, self.noMana = usable, noMana
     self:ApplyTint()
 end
 
 function Button:UpdateRange(inRange, checksRange)
+    if inRange == nil and checksRange == nil then
+        -- no event at hand (a full update, a new target): ask now. nil = nothing to measure.
+        local ok, r = pcall(C_ActionBar.IsActionInRange, self.action)
+        if not ok or IsSecret(r) then return end
+        inRange, checksRange = r, r ~= nil
+    end
     if IsSecret(inRange) or IsSecret(checksRange) then return end
     self.outOfRange = checksRange and not inRange or nil
     self:ApplyTint()
@@ -430,6 +479,9 @@ for _, e in ipairs({
     "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID",
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE", "UNIT_INVENTORY_CHANGED",
     "PLAYER_REGEN_ENABLED",   -- refresh secure attributes skipped during combat
+    -- mounts: indoors / outdoors / no-mount zones change whether they can be used
+    "MOUNT_JOURNAL_USABILITY_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA",
+    "PLAYER_MOUNT_DISPLAY_CHANGED",
 }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -448,6 +500,9 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
         end
     elseif event == "ACTION_RANGE_CHECK_UPDATE" then
         ForSlot(a1, "UpdateRange", a2, a3)
+    elseif event == "MOUNT_JOURNAL_USABILITY_CHANGED" or event == "ZONE_CHANGED_INDOORS"
+        or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+        ForAll("UpdateUsable")
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" or event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
         ForAll("UpdateGlow")
     elseif event == "ACTIONBAR_UPDATE_STATE" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_CLOSE"

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] — 2026-11-16
+
+- **Fixed: spells and shots didn't turn red out of range.** Hiding Blizzard's bars also switched off the game's range check for the same buttons, so VoidBars never heard you were out of range. It now turns it back on for its own buttons and checks again the moment you change target.
+- **Mounts grey out where you can't ride** (indoors, no-mount zones), like a spell you can't cast. While you're mounted the button stays normal, since it's also how you get off.
+- **The clean layout never empties your bars.** On a class VoidSequencer has no rotation for, the suggestion used to find nothing and clear every key. Now:
+  - keys with no suggestion keep what's on them;
+  - if nothing at all is found, your bars stay as they are;
+  - key 1 only stays free for VoidSequencer when it really has a rotation for your character.
+- **WoW Forever: better suggestions for Classic spells.** Raptor Strike, Heroic Strike and Auto Shot now count as damage, and utility from your spellbook (Aspect of the Monkey...) gets a Shift key.
+- **New characters:** the world-marker bar shows only in a group (markers can't be placed solo), at the top of the screen instead of mid-screen. The "clean layout" question waits until other first-run boxes are closed.
+- **Windows open in front** of the Void windows already open, and come forward when you click them.
+
 ## [1.1.0] — 2026-11-13
 
 - **WoW Forever: plain food keeps its own spot on the consumables bar.** On Forever most cooked food makes you well fed (Mithril Head Trout: +20 attack power), and that's the food you eat once for the buff, not between pulls. The bar now keeps a separate spot for plain food:

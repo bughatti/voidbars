@@ -153,6 +153,13 @@ function VB:InitMarkersConfig(def)
     local old = _G.VoidMarkersBar
     if old and old:GetLeft() then
         cfg.x, cfg.y = old:GetLeft(), old:GetTop()
+    else
+        -- a new player: markers can't be placed solo, so the bar shows in a group only, at the
+        -- top center (the bottom stack put it mid-screen on a level-7 Hunter, 2026-11-16).
+        -- Move mode still shows it; Bar settings -> Show changes the rule.
+        local w = def.count * (size + spacing) - spacing
+        cfg.x, cfg.y = (UIParent:GetWidth() - w) / 2, UIParent:GetHeight() - 70
+        cfg.show, cfg.showCustom = "custom", "[group] show; hide"
     end
 end
 
