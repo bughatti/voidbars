@@ -716,6 +716,7 @@ local function MakeHandle(bar)
         if bar.def.kind == "smart" then   -- dropped side of center = the side it lines up on
             local cx = cfg.x + bar:GetWidth() / 2
             cfg.side = cx < UIParent:GetWidth() / 2 and "left" or "right"
+            cfg.free = true   -- you placed it: no automatic spot any more (the PvP bar under the AoE switch)
         end
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cfg.x, cfg.y)
@@ -833,9 +834,8 @@ end)
 function VB:CreateVehicleExit()
     local b = CreateFrame("Button", "VoidBarsVehicleExit", UIParent)
     b:SetSize(36, 36)
-    -- above the right end of the main bar: beside it is where the Travel bar
-    -- sits in the naga7 layout, and it would have covered the first Travel buttons
-    b:SetPoint("BOTTOMRIGHT", self.bars.bar1, "TOPRIGHT", 0, 4)
+    self.vehicleExit = b
+    self:PlaceVehicleExit()
     local t = b:CreateTexture(nil, "ARTWORK")
     t:SetAllPoints()
     t:SetTexture("Interface\\Vehicles\\UI-Vehicles-Button-Exit-Up")
@@ -856,7 +856,23 @@ function VB:CreateVehicleExit()
     end)
     b:SetScript("OnLeave", GameTooltip_Hide)
     RegisterStateDriver(b, "visibility", "[canexitvehicle] show; hide")
-    self.vehicleExit = b
+end
+
+-- Where the get-off button goes: above the right end of the main bar (beside it is where the Travel bar sits in
+-- the naga7 layout, and it would have covered the first Travel buttons). The PvP bar now fills that row under
+-- the ST/AoE switch (the user, 2026-11-19, flying: "see the dismount, the bar is sitting on it"), so while it's
+-- there the button sits just right of the PvP bar's last button. Not a protected frame: moves any time.
+function VB:PlaceVehicleExit()
+    local b = self.vehicleExit
+    if not b then return end
+    local pvp = self.bars and self.bars.pvp
+    local cfg = pvp and self:BarConfig("pvp")
+    b:ClearAllPoints()
+    if pvp and cfg and cfg.enabled ~= false and not cfg.free and pvp.vbUnderToggle and (pvp.shownCount or 0) > 0 then
+        b:SetPoint("LEFT", pvp, "RIGHT", cfg.spacing or 4, 0)
+    else
+        b:SetPoint("BOTTOMRIGHT", self.bars.bar1, "TOPRIGHT", 0, 4)
+    end
 end
 
 ----------------------------------------------------------------------

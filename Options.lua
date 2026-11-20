@@ -202,6 +202,19 @@ function VB:BuildOptions()
     BarCheck("random", "fade", "Fade the Random bar out of combat", nil, false)
     BarSlider("random", "size", "Random button size", 36, 20, 64, 1)
     BarSlider("random", "cols", "Random buttons per row", 12, 1, 12, 1)
+    BarCheck("pvp", "enabled", "Show the PvP bar",
+        "Anything you like, like Random. Gear on it swaps: click puts the piece on, click again puts back what it replaced. A worn trinket you can use: click uses it, right-click puts the old one back. Weapons, mid-fight too: click puts the PvP weapon on, right-click your own weapon back. Armor waits until you're out of combat (the game's rule).", true)
+    BarCheck("pvp", "fade", "Fade the PvP bar out of combat", nil, false)
+    BarSlider("pvp", "size", "PvP button size", 36, 20, 64, 1)
+    BarSlider("pvp", "cols", "PvP buttons per row", 12, 1, 12, 1)
+    Check("mountGear", "Riding gear when mounted",
+        "When you mount, your mount-speed gear goes on (Carrot on a Stick, Riding Skill gloves, Mithril Spurs boots, anything that says mount speed, plus what you add below); when you get down, your own pieces go back. Knocked off into a fight: they go back when combat ends.")
+    Button("Riding gear", "Add", function()
+        if VB.MountGear then VB.MountGear:AddCursor() end
+    end, "Pick up a piece of gear (bags or character window), then click Add: it goes on whenever you mount.")
+    Button("Riding gear you added", "Forget", function()
+        if VB.MountGear then VB.MountGear:ForgetAdded() end
+    end, "Clears the pieces you added by hand. Mount-speed gear is still found on its own.")
     Button("Hidden consumables", "Show all again", function()
         VoidBarsCharDB.hiddenItems = {}
         VB:Print("all hidden items are back on the smart bars.")

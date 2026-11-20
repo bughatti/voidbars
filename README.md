@@ -35,8 +35,12 @@ These fill themselves and never use one of your action slots:
 - **Professions** — every ability of each profession you have (crafting windows, Disenchant, Cooking Fire, Fishing, ...) and your profession gear
 - **Pets** (pet classes) — hunters get a Call Pet button for each stable slot that holds a pet, plus Revive, Mend and Dismiss Pet; warlocks get their demon summons; Frost mages their Water Elemental. Separate from Blizzard's pet bar, which keeps your pet's own abilities
 - **Random** — an empty bar for anything you like: drag on mounts, toys, items, spells or macros (macros are kept by name, so a renamed or deleted macro drops off the bar)
+- **PvP** — like Random, anything you drag on, sitting under VoidSequencer's ST/AoE switch in one row at the size of your 1-7 keys. Gear on it swaps: click puts the piece on, click again puts back what it replaced. A PvP trinket you wear still breaks free on left-click; right-click puts your old trinket back. Weapons switch mid-fight too: click puts the PvP weapon on, right-click puts your own weapon back (with your shield or off-hand). Armor waits until you're out of combat (the game's rule)
 - **Every bar moves** — unlock in the options, drag any bar where you want it, and set its size and buttons per row
 - **Shift + right-click** hides a button from a smart bar for good; "Show all again" in the options brings the automatic ones back (a button you dragged on yourself is removed, so drag it back to restore it)
+
+### Riding gear
+- **On when you mount, off when you get down** — Carrot on a Stick, gloves with Riding Skill, boots with Mithril Spurs, anything that says mount speed, plus pieces you add in the options. Your own pieces go back when you dismount (knocked off into a fight: when combat ends). The riding trinket never takes the place of a trinket you can use. On by default; Options -> VoidBars to turn it off
 
 ### Keys and setup
 - **Keybind mode** — hover a button, press a key. Shift, Ctrl, Alt, mouse buttons and the wheel all work; Backspace clears; Esc finishes. Uses Blizzard's own keybindings, so your keys survive turning VoidBars off.

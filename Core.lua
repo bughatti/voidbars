@@ -44,6 +44,7 @@ VB.DEFAULTS = {
     resourceColor  = true,   -- blue icon when you lack the resource
     procGlow       = true,
     fadeAlpha      = 0,      -- alpha of a faded bar (0 = invisible until mouseover)
+    mountGear      = true,   -- put riding gear on when you mount, your own pieces back when you get down (MountGear.lua)
 }
 
 -- The look above is per character too (CharSettings.lua), like the layout in

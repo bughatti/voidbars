@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.0] — 2026-11-19
+
+- **Riding gear goes on when you mount.** Carrot on a Stick, gloves with Riding Skill, boots with Mithril Spurs, or anything that says mount speed: VoidBars puts it on as you mount and your own pieces back when you get down. The riding trinket never takes the place of a trinket you can use. Knocked off into a fight? Your pieces go back the moment combat ends. Turn it off, or add your own riding gear, in Options -> VoidBars.
+- **New PvP bar.** Drag anything onto it, like the Random bar. It sits under VoidSequencer's ST/AoE switch, one row of 7 at the size of your 1-7 keys (drag it in move mode to put it elsewhere). If a stance or pet bar already sits there, it goes just to the right of it. Gear on it swaps: click puts the piece on, click again puts back what it replaced. A PvP trinket you're wearing still breaks free on left-click; right-click puts your old trinket back. Weapons switch mid-fight too: click puts the PvP weapon on, right-click puts your own weapon back (with your shield or off-hand). Armor can't change in combat (the game's rule).
+
 ## [1.2.0] — 2026-11-16
 
 - **Fixed: spells and shots didn't turn red out of range.** Hiding Blizzard's bars also switched off the game's range check for the same buttons, so VoidBars never heard you were out of range. It now turns it back on for its own buttons and checks again the moment you change target.

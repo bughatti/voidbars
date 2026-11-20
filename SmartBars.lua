@@ -530,6 +530,8 @@ local function NewCollector(barKey)
                 -- a worn profession item (fishing rod) shows its swap-back piece
                 if barKey == "professions" and e.kind == "item" and C_Item.IsEquippedItem(e.id) then
                     entry = VB.ProfessionSwap(e.id)
+                elseif barKey == "pvp" and e.kind == "item" and VB.PvPEntry then
+                    entry = VB.PvPEntry(e.id)
                 end
                 add(entry, entry.swapFor == nil)
             end
@@ -711,6 +713,8 @@ end
 local function RememberMainGear(slot, tries)
     local id = GetInventoryItemID("player", slot)
     if not id then return end
+    -- riding gear we put on for a ride (MountGear.lua) is not your main piece
+    if VB.MountGear and VB.MountGear:Holds(slot) then return end
     local isGear, notReady = VB.IsProfessionGear(id)
     if notReady then
         -- item data not loaded yet: check again shortly if it's still the same item
@@ -725,18 +729,204 @@ local function RememberMainGear(slot, tries)
     end
 end
 
+----------------------------------------------------------------------
+-- PvP gear swap (the user, 2026-11-19: "a pvp bar that can hold anything and allows switching of any items that
+-- that pvp item went to"; picked: one click puts the PvP piece on, the button then puts back what it replaced).
+-- Whenever a piece on the PvP bar goes on in a slot, the piece it pushed off is remembered for it:
+-- VoidBarsCharDB.pvpBack[pvpItemID] = { id = replaced itemID, slot = slot }. Riding gear we put on for a ride
+-- doesn't count as "replaced": the piece under it does (MountGear's saved one).
+----------------------------------------------------------------------
+local worn = {}   -- slot -> item LINK worn there (to know what a change pushed off, down to its suffix / enchant)
+
+-- "item:12345:0:..." from a link: the exact copy ("of the Owl", an enchant), and no brackets for a macro to parse
+-- (Astra: by item ID alone the wrong copy could go back on)
+local function ItemString(link)
+    if type(link) ~= "string" or IsSecret(link) then return nil end
+    return link:match("|H(item:[^|]+)|h")
+end
+local function LinkID(link)
+    return type(link) == "string" and not IsSecret(link) and C_Item.GetItemInfoInstant(link) or nil
+end
+
+local function PvPList()
+    local out = {}
+    for _, e in ipairs(CuratedList("pvp")) do
+        if e.kind == "item" then out[e.id] = true end
+    end
+    return out
+end
+function VB.IsPvPItem(id) return id and PvPList()[id] or false end
+
+local function PvPBack()
+    VoidBarsCharDB.pvpBack = VoidBarsCharDB.pvpBack or {}
+    return VoidBarsCharDB.pvpBack
+end
+
+local MAIN, OFF = 16, 17
+local offGone, offGoneAt, lastMainAt   -- the off-hand that just came off (a two-hander going on), whichever event comes first
+
+-- takes both hands: two-handers, and on retail bows / guns / crossbows too (they sit in the main hand; Astra)
+local function isTwoHander(id)
+    local loc = id and select(4, C_Item.GetItemInfoInstant(id))
+    return loc == "INVTYPE_2HWEAPON"
+        or (not IS_FOREVER and (loc == "INVTYPE_RANGED" or loc == "INVTYPE_RANGEDRIGHT")) or false
+end
+
+-- a copy of this item in the bags (C_Item.IsEquippedItem is true for ANY worn copy: with two of the same sword in
+-- both hands, the one you took off looked "worn", Astra)
+local function InBags(id)
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        for s = 1, C_Container.GetContainerNumSlots(bag) do
+            local info = C_Container.GetContainerItemInfo(bag, s)
+            if info and info.itemID == id then return true end
+        end
+    end
+    return false
+end
+
+local function RememberPvPSwap(slot)
+    local newLink, prevLink = GetInventoryItemLink("player", slot), worn[slot]
+    local prevOffLink = worn[OFF]
+    worn[slot] = newLink
+    local new, prev = LinkID(newLink), LinkID(prevLink)
+    local pvp = PvPList()
+    local back = PvPBack()
+    -- A two-hander pushed the off-hand off: it goes back with the one-hander (Sol). One swap fires two events in
+    -- either order. Main-hand first: it still sees the off-hand in worn[OFF]. Off-hand first: it's kept in offGone
+    -- for the main-hand event of the SAME swap only (Sol: a shield from an earlier swap got pinned on a later one).
+    -- "The same swap" = the same frame: both events of one swap carry the same GetTime(), two swaps never do.
+    if slot == OFF and not new and prevLink then
+        if lastMainAt ~= GetTime() then offGone, offGoneAt = prevLink, GetTime() end
+        return
+    end
+    local gone = nil
+    if slot == MAIN then
+        lastMainAt = GetTime()
+        gone = offGoneAt == GetTime() and offGone or nil
+        offGone, offGoneAt = nil, nil   -- used by this swap or by none
+    end
+    if not new or newLink == prevLink or not pvp[new] then return end
+    local rec = back[new] or {}
+    back[new] = rec
+    rec.slot = slot   -- where it went: equipping it again goes there (trinkets, rings)
+    -- the off-hand a two-hander pushed off just now (either event order)
+    local offNow = slot == MAIN and isTwoHander(new) and (prevOffLink or gone) or nil
+    if not prev then
+        -- nothing was in that hand: only a shield it pushed off goes back (Sol: it was lost)
+        if offNow then rec.id, rec.str, rec.off, rec.offStr = nil, nil, LinkID(offNow), ItemString(offNow) end
+        return
+    end
+    local mg = VB.MountGear
+    local saved = mg and VoidBarsCharDB.mountSaved and VoidBarsCharDB.mountSaved[slot]
+    if saved and saved.put == prev then
+        local under = saved.back and LinkID(saved.back)
+        -- getting down: the riding swap put THIS piece back, so what it replaced before stands (Sol)
+        if under == new then return end
+        -- it went on over riding gear: the piece under the riding gear is the one to go back to
+        mg:Forget(slot)
+        if under then rec.id, rec.str = under, ItemString(saved.back) end
+    elseif mg and mg.WasRiding and mg.WasRiding(prev) then
+        return   -- riding gear coming off isn't what this piece replaced
+    elseif pvp[prev] then
+        -- one PvP piece over another: this one goes back to the other's normal piece (each PvP button switches
+        -- between itself and your normal piece; Sol: it was left with nothing to go back to). A shield this swap
+        -- pushed off (PvP one-hander -> PvP two-hander) goes back too (Astra).
+        local pr = back[prev]
+        if pr and (pr.id or pr.off) and pr.id ~= new then   -- (a shield-only record counts too, Sol)
+            rec.id, rec.str = pr.id, pr.str
+            -- the off-hand you actually wore wins over one inherited from an older swap (Sol)
+            if offNow then rec.off, rec.offStr = LinkID(offNow), ItemString(offNow)
+            else rec.off, rec.offStr = pr.off, pr.offStr end
+        end
+    else
+        rec.id, rec.str = prev, ItemString(prevLink)
+        rec.off, rec.offStr = nil, nil
+        if offNow then rec.off, rec.offStr = LinkID(offNow), ItemString(offNow) end
+    end
+end
+
+-- Weapons switch in combat too (the game allows it), but a button can't change what it does mid-fight. A button
+-- that flipped itself after each click went out of step with two PvP weapons or a refused swap (Astra), so a
+-- weapon's button does two FIXED things, right whatever you wear: click = put this weapon on, right-click = your
+-- own weapon (and off-hand) back. Ranged: slot 18 on WoW Forever, the main hand on retail (Astra).
+local RANGED = IS_FOREVER and 18 or MAIN
+local WEAPON_SLOT = { INVTYPE_WEAPON = MAIN, INVTYPE_2HWEAPON = MAIN, INVTYPE_WEAPONMAINHAND = MAIN,
+    INVTYPE_WEAPONOFFHAND = OFF, INVTYPE_SHIELD = OFF, INVTYPE_HOLDABLE = OFF,
+    INVTYPE_RANGED = RANGED, INVTYPE_RANGEDRIGHT = RANGED, INVTYPE_THROWN = RANGED }
+local function EquipText(slot, str, offStr)
+    return ("/equipslot %d %s"):format(slot, str) .. (offStr and ("\n/equipslot 17 " .. offStr) or "")
+end
+
+-- the PvP bar's entry for an item on your list
+local function TwoSlot(id)
+    local _, _, _, loc = C_Item.GetItemInfoInstant(id)
+    return loc == "INVTYPE_TRINKET" or loc == "INVTYPE_FINGER" or loc == "INVTYPE_WEAPON", loc
+end
+function VB.PvPEntry(id)
+    local _, loc = TwoSlot(id)
+    if not C_Item.IsEquippableItem(id) or loc == "INVTYPE_BAG" then
+        return { kind = "item", id = id }   -- a potion, a scroll...: just used
+    end
+    local rec = PvPBack()[id]
+    local slot = SlotOfEquipped(id)
+    local wslot = WEAPON_SLOT[loc]
+    local back = rec and rec.id
+    local have = back and back ~= id and InBags(back)
+    local backStr = have and (rec.str or ("item:" .. back)) or nil
+    local off = rec and rec.off and InBags(rec.off) and (rec.offStr or ("item:" .. rec.off)) or nil
+    if wslot then
+        -- a weapon: click = this weapon on, right-click = your own weapon back (fixed, so right in combat too)
+        local eq = slot or (rec and rec.slot) or wslot
+        local normStr, normOff, normID = backStr, off, have and back or nil
+        if not slot then
+            -- not worn: your own weapon is what's in that slot now, or, when that's another PvP weapon, ITS own
+            local curLink = GetInventoryItemLink("player", eq)
+            local curID = LinkID(curLink)
+            local pr = curID and PvPList()[curID] and PvPBack()[curID]
+            if pr then
+                normID, normStr = pr.id, pr.id and (pr.str or ("item:" .. pr.id))
+                -- (a PvP one-hander kept your shield on: the shield you wear now goes back with it, Astra)
+                normOff = (isTwoHander(id) and ItemString(GetInventoryItemLink("player", OFF))) or pr.offStr   -- worn now wins (Sol)
+            elseif curID then
+                normID, normStr = curID, ItemString(curLink)
+                normOff = isTwoHander(id) and ItemString(GetInventoryItemLink("player", OFF)) or nil
+            end
+        end
+        -- (the hand was empty before: the shield alone goes back)
+        local backText = (normStr and EquipText(eq, normStr, normOff)) or (normOff and ("/equipslot 17 " .. normOff)) or nil
+        return { kind = "item", id = id, weapon = true, equipSlot = eq, backID = normID, backText = backText }
+    end
+    if slot then
+        if have and C_Item.GetItemSpell(id) then
+            -- worn with an on-use (PvP trinket): left-click still uses it, right-click puts the old piece back
+            return { kind = "item", id = id, back = back, backSlot = slot, backStr = backStr }
+        elseif have then
+            -- worn, nothing to use: the button shows the old piece and puts it back (armor: out of combat)
+            return { kind = "item", id = back, swapFor = id, equipSlot = slot, equipStr = backStr }
+        end
+        return { kind = "item", id = id }
+    end
+    -- not worn: one click puts it on, in the slot it went to last time (trinkets, rings)
+    local twoSlot = TwoSlot(id)
+    return { kind = "item", id = id, equipSlot = twoSlot and rec and rec.slot or nil }
+end
+
 local gearEv = CreateFrame("Frame")
 gearEv:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 gearEv:RegisterEvent("PLAYER_ENTERING_WORLD")
 gearEv:SetScript("OnEvent", function(_, event, slot)
     if not VoidBarsCharDB then return end
     if event == "PLAYER_EQUIPMENT_CHANGED" and slot then
+        RememberPvPSwap(slot)
         RememberMainGear(slot)
         if VB.RebuildSmartBars then
             VB:RunOutOfCombat("smartrebuild", function() VB:RebuildSmartBars() end)
         end
     else
-        for s = 1, 19 do RememberMainGear(s) end
+        for s = 1, 19 do
+            worn[s] = GetInventoryItemLink("player", s)
+            RememberMainGear(s)
+        end
     end
 end)
 
@@ -849,6 +1039,13 @@ function VB:CollectRandom()
     return list, false
 end
 
+-- PvP: like Random (anything you drag on), and gear on it swaps (VB.PvPEntry).
+function VB:CollectPvP()
+    local list, _, addCurated = NewCollector("pvp")
+    addCurated()
+    return list, false
+end
+
 local houseEv = CreateFrame("Frame")
 houseEv:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
 houseEv:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -900,7 +1097,8 @@ function Smart:UpdateVisual()
         self.icon:SetTexture(C_Item.GetItemIconByID(e.id))
         local count = C_Item.GetItemCount(e.id, false, true) or 0
         self.Count:SetText(count > 1 and count or "")
-        if count == 0 then self.icon:SetVertexColor(VB.COLOR.unusable:GetRGB())
+        -- a worn piece (PvP trinket) isn't in the bags but is there to use
+        if count == 0 and not C_Item.IsEquippedItem(e.id) then self.icon:SetVertexColor(VB.COLOR.unusable:GetRGB())
         else Tint(self, C_Item.IsUsableItem(e.id)) end
         SetCD(self.cooldown, C_Container.GetItemCooldown(e.id))
     elseif e.kind == "toy" then
@@ -949,7 +1147,8 @@ end
 -- Secure attributes for an entry (out of combat only).
 function Smart:Assign(e)
     self.entry = e
-    for _, a in ipairs({ "item", "toy", "spell", "macro", "macrotext", "house-neighborhood-guid", "house-guid", "house-plot-id" }) do
+    for _, a in ipairs({ "item", "toy", "spell", "macro", "macrotext", "house-neighborhood-guid", "house-guid", "house-plot-id",
+        "type2", "macrotext2" }) do
         self:SetAttribute(a, nil)
     end
     -- the "+" square and a food you don't carry (Forever's plain-food spot) use nothing: the click routes
@@ -966,9 +1165,25 @@ function Smart:Assign(e)
     if mountID then
         self:SetAttribute("type", "macro")
         self:SetAttribute("macrotext", ("/run C_MountJournal.SummonByID(%d)"):format(mountID))
+    elseif e.kind == "item" and e.equipSlot then
+        -- gear into one exact slot (PvP bar: the slot it went to / the slot to put the old piece back in)
+        -- (equipStr: the exact copy, suffix and enchant included)
+        self:SetAttribute("type", "macro")
+        self:SetAttribute("macrotext", EquipText(e.equipSlot, e.equipStr or ("item:" .. e.id)))
+        if e.weapon and e.backText then
+            -- a weapon: right-click = your own weapon (and off-hand) back, in combat too (Shift+right-click
+            -- still removes it from the bar)
+            self:SetAttribute("type2", "macro")
+            self:SetAttribute("macrotext2", e.backText)
+        end
     elseif e.kind == "item" then
         self:SetAttribute("type", "item")
         self:SetAttribute("item", "item:" .. e.id)
+        if e.back and e.backSlot then
+            -- a worn on-use piece: right-click puts the old one back (Shift+right-click still removes)
+            self:SetAttribute("type2", "macro")
+            self:SetAttribute("macrotext2", EquipText(e.backSlot, e.backStr or ("item:" .. e.back)))
+        end
     elseif e.kind == "toy" then
         self:SetAttribute("type", "toy")
         self:SetAttribute("toy", e.id)
@@ -1028,7 +1243,19 @@ local function ShowTooltip(self)
     local bar = self:GetParent()
     if e.swapFor then
         GameTooltip:AddLine(("Click: put this back on (you're wearing %s)"):format(
-            C_Item.GetItemNameByID(e.swapFor) or "your profession gear"), 0.4, 1, 0.4, true)
+            C_Item.GetItemNameByID(e.swapFor) or "the other piece"), 0.4, 1, 0.4, true)
+    elseif e.back then
+        GameTooltip:AddLine(("Right-click: put %s back on"):format(C_Item.GetItemNameByID(e.back) or "your old piece"),
+            0.4, 1, 0.4, true)
+    elseif e.weapon then
+        GameTooltip:AddLine("Click: put it on", 0.4, 1, 0.4)
+        if e.backText then
+            GameTooltip:AddLine(("Right-click: %s back on (in combat too)"):format(
+                (e.backID and C_Item.GetItemNameByID(e.backID)) or "your own weapon"), 0.4, 1, 0.4, true)
+        end
+    elseif bar.def.key == "pvp" and e.kind == "item" and not C_Item.IsEquippedItem(e.id)
+        and C_Item.IsEquippableItem(e.id) then
+        GameTooltip:AddLine("Click: put it on (click again to put back what it replaced)", 0.4, 1, 0.4, true)
     end
     if bar.def.curated then
         GameTooltip:AddLine(e.curated and ("Shift+Right-click: remove from the " .. bar.def.label:lower() .. " bar")
@@ -1127,6 +1354,10 @@ local SMART_DEFS = {
       near = { key = "travel", above = true } },
     { key = "random",      label = "Random",      kind = "smart", collect = "CollectRandom",      y = 305, curated = true, side = "right",
       near = { key = "travel" } },
+    -- the user, 2026-11-19: "a pvp bar that can hold anything"; gear on it swaps (VB.PvPEntry); then "as big as my
+    -- 1-7 and under the aoe mode button": one row of 7 at the 1-7 keys' size, under VoidSequencer's switch
+    { key = "pvp",         label = "PvP",         kind = "smart", collect = "CollectPvP",         y = 305, curated = true, side = "right",
+      near = { key = "random" }, underToggle = true, max = 7 },
 }
 
 function VB:CreateSmartBars()
@@ -1209,8 +1440,60 @@ function VB:NudgeOffBars(bar, cfg, onLeft)
     end
 end
 
+-- The PvP bar's own spot: the 1-7 keys' (bar1) button size and spacing, one row, centered under VoidSequencer's
+-- ST/AoE switch in the space between it and bar1 (the user's layout: 57 px there, a 45 px row fits). No switch
+-- shown (no VoidSequencer, a healer spec): right above bar1. Dragged in move mode -> cfg.free: yours from then on.
+function VB:PlaceUnderToggle(bar, cfg)
+    local b1, c1 = self.bars.bar1, self:BarConfig("bar1")
+    if not (b1 and c1 and c1.enabled and c1.x and c1.y and (b1:GetWidth() or 0) > 1) then return false end
+    local gap = c1.spacing or 4
+    local h, w = bar:GetHeight(), bar:GetWidth()
+    local bottom = c1.y + gap
+    local cx = c1.x + b1:GetWidth() / 2
+    local tog = _G.VoidSeqToggle
+    local tb, tl, tr = tog and tog:IsShown() and tog:GetBottom(), tog and tog:GetLeft(), tog and tog:GetRight()
+    if tb and tl and tr and tb > c1.y then
+        local room = tb - c1.y
+        if room >= h then bottom = c1.y + (room - h) / 2 end   -- centered between bar1 and the switch
+        cx = (tl + tr) / 2
+    end
+    local x, top = cx - w / 2, bottom + h
+    -- another bar already sits there (a rogue's stance bar, a pet bar: seen on the user's rogue 2026-11-20, the
+    -- "+" lay on the Stealth bar's end): slide right past it, never on top of it
+    -- (the switch itself too: with too little room under it the row would reach up into it; Sol)
+    local sgap = self.GROUP_GAP or 14
+    local others = {}
+    for _, o in ipairs(self.bars) do others[#others + 1] = o end
+    if tog then others[#others + 1] = tog end
+    for _ = 1, #others + 1 do   -- each pass moves past at least one frame, so this always ends clear (Sol)
+        local moved = false
+        for _, o in ipairs(others) do
+            if o ~= bar and o ~= b1 and o:IsVisible() then
+                local l, r, t, bo = o:GetLeft(), o:GetRight(), o:GetTop(), o:GetBottom()
+                if type(l) == "number" and type(r) == "number" and type(t) == "number" and type(bo) == "number"
+                    and (r - l) > 1
+                    and top > bo and top - h < t                        -- rows overlap
+                    and x < r + gap and l - gap < x + w then             -- columns overlap (or touch)
+                    x, moved = r + sgap, true
+                end
+            end
+        end
+        if not moved then break end
+    end
+    cfg.x, cfg.y = x, top
+    return true
+end
+
 function VB:LayoutSmartBar(bar)
     local cfg = self:BarConfig(bar.def.key)
+    -- the PvP bar takes the 1-7 keys' size once (the sliders still change it after)
+    if bar.def.underToggle and not cfg.likeBar1 then
+        local c1 = self:BarConfig("bar1")
+        if c1 and c1.size then
+            cfg.likeBar1 = true
+            cfg.size, cfg.spacing, cfg.cols = c1.size, c1.spacing or 4, bar.def.max or 7
+        end
+    end
     local size = cfg.size or 36
     local cols = math.max(1, cfg.cols or 12)
     local spacing = cfg.spacing or 3
@@ -1264,10 +1547,16 @@ function VB:LayoutSmartBar(bar)
             cfg.y = bar.def.y or 305   -- above the usual bottom-center bars; move it in move mode
         end
     end
-    self:SnapToBlock(bar, cfg, onLeft)
-    self:NudgeOffBars(bar, cfg, onLeft)
+    local placed = bar.def.underToggle and not cfg.free and self:PlaceUnderToggle(bar, cfg)
+    if bar.def.underToggle then bar.vbUnderToggle = placed or nil end
+    if not placed then
+        self:SnapToBlock(bar, cfg, onLeft)
+        self:NudgeOffBars(bar, cfg, onLeft)
+    end
     bar:ClearAllPoints()
     bar:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cfg.x, cfg.y)
+    -- the get-off button moves beside the PvP bar while it fills the row above the 1-7 keys (Bars.lua)
+    if bar.def.underToggle and self.PlaceVehicleExit then self:PlaceVehicleExit() end
     -- hidden in pet battles and vehicles (Bars.lua VEHICLES)
     RegisterStateDriver(bar, "visibility", (cfg.enabled and (shown > 0 or VB.unlocked))
         and ("[petbattle][vehicleui][overridebar] hide; " .. VB:ShowRule(cfg)) or "hide")
@@ -1288,10 +1577,11 @@ function VB:RebuildSmartBars()
         -- grows into the combat block beside it (Professions, 2026-10-25)
         -- No "+" while the bar is hidden in a dungeon / raid (its list is empty there;
         -- a lone "+" kept the bar on screen, seen 2026-10-25 in Den of Nalorakk).
-        if bar.def.curated and #list < MAX_BUTTONS and not HiddenInInstance(bar.def.key) then
+        local max = bar.def.max or MAX_BUTTONS   -- the PvP bar: one row of 7, like the 1-7 keys
+        if bar.def.curated and #list < max and not HiddenInInstance(bar.def.key) then
             table.insert(list, self:SmartBarOnLeft(bar) and 1 or #list + 1, { kind = "drop" })
         end
-        bar.shownCount = math.min(#list, MAX_BUTTONS)
+        bar.shownCount = math.min(#list, max)
         for i, b in ipairs(bar.buttons) do
             b:Assign(list[i])
         end
@@ -1302,6 +1592,22 @@ function VB:RebuildSmartBars()
             C_Timer.After(2, function() pendingRetry = false; self:RebuildSmartBars() end)
         end
     end
+end
+
+-- What the shown smart bars hold right now: { [id] = true } for one kind ("spell" / "item").
+-- The suggested layout keeps these off the 14 keys (one press, one place).
+function VB:SmartBarIDs(kind)
+    local out = {}
+    for _, bar in ipairs(self.smartBars or {}) do
+        local cfg = self:BarConfig(bar.def.key)
+        if cfg and cfg.enabled ~= false then
+            for i = 1, (bar.shownCount or 0) do
+                local e = bar.buttons[i] and bar.buttons[i].entry
+                if e and e.kind == kind and e.id and not e.missing then out[e.id] = true end
+            end
+        end
+    end
+    return out
 end
 
 function VB:UpdateSmartVisuals()
@@ -1317,6 +1623,25 @@ local function QueueRebuild()
     C_Timer.After(0.3, function() queued = false; VB:RebuildSmartBars() end)
 end
 
+-- The PvP bar follows VoidSequencer's ST/AoE switch: it's placed at login (maybe after our first layout) and can be
+-- dragged (right-click), shown or hidden by spec.
+local toggleHooked = false
+local function HookToggle()
+    local tog = _G.VoidSeqToggle
+    if toggleHooked or not tog then return end
+    toggleHooked = true
+    local function relayout()
+        local bar = VB.bars and VB.bars.pvp
+        if bar and bar.shownCount then
+            VB:RunOutOfCombat("pvpplace", function() VB:LayoutSmartBar(bar) end)
+        end
+    end
+    hooksecurefunc(tog, "SetPoint", relayout)
+    tog:HookScript("OnDragStop", relayout)
+    tog:HookScript("OnShow", relayout)
+    tog:HookScript("OnHide", relayout)
+end
+
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
     "PLAYER_REGEN_ENABLED", "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "PLAYER_LEVEL_UP",
@@ -1326,6 +1651,7 @@ for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGE
 end
 ev:SetScript("OnEvent", function(_, event)
     if not VB.smartBars[1] then return end
+    if event == "PLAYER_ENTERING_WORLD" then HookToggle() end
     if event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN"
         or event == "MOUNT_JOURNAL_USABILITY_CHANGED" then
         VB:UpdateSmartVisuals()
