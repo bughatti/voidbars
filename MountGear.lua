@@ -140,9 +140,21 @@ local function slotFor(loc)
     return slots[1]
 end
 
+-- HasFullControl: a flight path takes your controls the moment it starts, before UnitOnTaxi turns true; the
+-- Carrot went on for flight-path rides (the user, 2026-11-20: "it is doing it with the flight mounts from place to
+-- place, it should only be for ground mounts")
 local function busy()
     return InCombatLockdown() or UnitIsDeadOrGhost("player") or UnitOnTaxi("player")
+        or (HasFullControl and not HasFullControl())
         or UnitCastingInfo("player") ~= nil or UnitChannelInfo("player") ~= nil
+end
+
+-- riding gear is for your own GROUND mount: never a flight path, never while flying
+local function onGroundMount()
+    if not IsMounted() then return false end
+    if UnitOnTaxi("player") or (HasFullControl and not HasFullControl()) then return false end
+    if IsFlying and IsFlying() then return false end
+    return true
 end
 
 local APPLY_TICKS = 6   -- after mounting, keep trying 3 s (a locked item, a tooltip not loaded yet), then leave it
@@ -233,7 +245,7 @@ local wasMounted, applyTicks = nil, 0
 function M:Tick()
     if not VoidBarsCharDB then return end
     local on = VB:Get("mountGear") ~= false
-    local mounted = IsMounted() and true or false
+    local mounted = onGroundMount()
     if mounted ~= wasMounted then
         wasMounted = mounted
         applyTicks = 0

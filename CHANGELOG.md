@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.1] — 2026-11-20
+
+- **Fixed: riding gear went on for flight paths.** Carrot on a Stick and the other riding gear now go on only for your own ground mount, never on a flight path or while flying.
+
 ## [1.3.0] — 2026-11-19
 
 - **Riding gear goes on when you mount.** Carrot on a Stick, gloves with Riding Skill, boots with Mithril Spurs, or anything that says mount speed: VoidBars puts it on as you mount and your own pieces back when you get down. The riding trinket never takes the place of a trinket you can use. Knocked off into a fight? Your pieces go back the moment combat ends. Turn it off, or add your own riding gear, in Options -> VoidBars.
