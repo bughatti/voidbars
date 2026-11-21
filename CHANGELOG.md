@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.3] — 2026-11-21
+
+- **Fixed on WoW Forever: per-character settings.** The game stopped telling addons your realm's name, so your character's own settings were no longer loaded or saved. They are again, from where they were saved before.
+
 ## [1.3.2] — 2026-11-21
 
 - **PvP bar: simpler clicks.** Left-click uses the item (a PvP trinket you wear breaks free); right-click swaps it: on if it isn't, and the piece it replaced back if it is. The button always shows the PvP item, with a small green corner while you wear it.
