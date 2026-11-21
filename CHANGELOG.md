@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.2] — 2026-11-21
+
+- **PvP bar: simpler clicks.** Left-click uses the item (a PvP trinket you wear breaks free); right-click swaps it: on if it isn't, and the piece it replaced back if it is. The button always shows the PvP item, with a small green corner while you wear it.
+- **PvP bar: choose what each piece swaps with.** Shift+right-click a PvP item to pick the piece it trades places with (Smotts' Compass for your Golden Banana...), change it any time, or remove it from the bar. It goes in that piece's exact slot. "Whatever it pushes off" stays as the automatic way.
+
 ## [1.3.1] — 2026-11-20
 
 - **Fixed: riding gear went on for flight paths.** Carrot on a Stick and the other riding gear now go on only for your own ground mount, never on a flight path or while flying.

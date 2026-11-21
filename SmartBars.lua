@@ -811,6 +811,14 @@ local function RememberPvPSwap(slot)
     rec.slot = slot   -- where it went: equipping it again goes there (trinkets, rings)
     -- the off-hand a two-hander pushed off just now (either event order)
     local offNow = slot == MAIN and isTwoHander(new) and (prevOffLink or gone) or nil
+    -- a partner you picked (Shift+right-click menu) stays, whatever this swap pushed off; a shield a picked
+    -- two-hander pushed off still goes back with your pick (Codex)
+    if rec.picked then
+        rec.off, rec.offStr = offNow and LinkID(offNow) or nil, offNow and ItemString(offNow) or nil
+        -- the pick itself came off the off-hand (dual wield): it goes back to the main hand only (Codex)
+        if rec.offStr and rec.offStr == rec.str then rec.off, rec.offStr = nil, nil end
+        return
+    end
     if not prev then
         -- nothing was in that hand: only a shield it pushed off goes back (Sol: it was lost)
         if offNow then rec.id, rec.str, rec.off, rec.offStr = nil, nil, LinkID(offNow), ItemString(offNow) end
@@ -857,6 +865,26 @@ local function EquipText(slot, str, offStr)
     return ("/equipslot %d %s"):format(slot, str) .. (offStr and ("\n/equipslot 17 " .. offStr) or "")
 end
 
+-- where your picked partner is worn: that exact copy first (two rings of one name, different suffixes; Codex),
+-- else any copy
+local function SlotOfPick(rec)
+    if rec.str then
+        for s = 1, 19 do
+            if ItemString(GetInventoryItemLink("player", s)) == rec.str then return s end
+        end
+    end
+    return SlotOfEquipped(rec.id)
+end
+
+-- can an item of this equip type go in that slot?
+local FIT = { INVTYPE_TRINKET = { [13] = true, [14] = true }, INVTYPE_FINGER = { [11] = true, [12] = true },
+    INVTYPE_WEAPON = { [MAIN] = true, [OFF] = true } }
+local function FitsSlot(loc, s)
+    if FIT[loc] then return FIT[loc][s] or false end
+    if WEAPON_SLOT[loc] then return WEAPON_SLOT[loc] == s end
+    return true   -- armor: one slot, the game puts it there anyway
+end
+
 -- the PvP bar's entry for an item on your list
 local function TwoSlot(id)
     local _, _, _, loc = C_Item.GetItemInfoInstant(id)
@@ -874,16 +902,26 @@ function VB.PvPEntry(id)
     local have = back and back ~= id and InBags(back)
     local backStr = have and (rec.str or ("item:" .. back)) or nil
     local off = rec and rec.off and InBags(rec.off) and (rec.offStr or ("item:" .. rec.off)) or nil
+    -- the partner you picked, where you wear it now: the PvP piece goes in exactly that slot (Smotts' Compass in
+    -- place of the Golden Banana, not whichever trinket the game picks; the user, 2026-11-20)
+    local pickedSlot = rec and rec.picked and rec.id and not slot and SlotOfPick(rec) or nil
+    -- only a slot this piece can go in (a picked one-hander in the off-hand is no spot for a two-hander; Codex)
+    if pickedSlot and not FitsSlot(loc, pickedSlot) then pickedSlot = nil end
     if wslot then
         -- a weapon: click = this weapon on, right-click = your own weapon back (fixed, so right in combat too)
-        local eq = slot or (rec and rec.slot) or wslot
+        local eq = slot or pickedSlot or (rec and rec.slot) or wslot
         local normStr, normOff, normID = backStr, off, have and back or nil
         if not slot then
             -- not worn: your own weapon is what's in that slot now, or, when that's another PvP weapon, ITS own
             local curLink = GetInventoryItemLink("player", eq)
             local curID = LinkID(curLink)
             local pr = curID and PvPList()[curID] and PvPBack()[curID]
-            if pr then
+            if rec and rec.picked and rec.id then
+                -- your pick, whatever you wear now: the right-click is fixed for the fight (Codex)
+                normID, normStr = rec.id, rec.str or ("item:" .. rec.id)
+                normOff = isTwoHander(id) and ItemString(GetInventoryItemLink("player", OFF)) or nil
+                if normOff == normStr then normOff = nil end   -- the pick itself sat in the off-hand
+            elseif pr then
                 normID, normStr = pr.id, pr.id and (pr.str or ("item:" .. pr.id))
                 -- (a PvP one-hander kept your shield on: the shield you wear now goes back with it, Astra)
                 normOff = (isTwoHander(id) and ItemString(GetInventoryItemLink("player", OFF))) or pr.offStr   -- worn now wins (Sol)
@@ -892,23 +930,99 @@ function VB.PvPEntry(id)
                 normOff = isTwoHander(id) and ItemString(GetInventoryItemLink("player", OFF)) or nil
             end
         end
+        -- your weapon goes back where it fits: a two-hander picked for a one-hander worn in the off-hand goes in the
+        -- main hand, with nothing for the off-hand (Codex)
+        local putSlot = eq
+        local normLoc = normID and select(4, C_Item.GetItemInfoInstant(normID))
+        if normLoc and not FitsSlot(normLoc, eq) then putSlot = WEAPON_SLOT[normLoc] or eq end
+        -- a two-hander takes both hands: no off-hand line after it (it would knock the two-hander off again)
+        if normID and isTwoHander(normID) then normOff = nil end
         -- (the hand was empty before: the shield alone goes back)
-        local backText = (normStr and EquipText(eq, normStr, normOff)) or (normOff and ("/equipslot 17 " .. normOff)) or nil
-        return { kind = "item", id = id, weapon = true, equipSlot = eq, backID = normID, backText = backText }
+        local backText = (normStr and EquipText(putSlot, normStr, normOff)) or (normOff and ("/equipslot 17 " .. normOff)) or nil
+        -- right-click: worn = your own weapon back; not worn = this one on
+        -- (a worn weapon with an on-use: left-click uses it, like a trinket; Codex)
+        -- In combat the right-click keeps the direction it had when the fight began (a button can't change in
+        -- combat): one swap per fight, it flips once the fight ends.
+        return { kind = "item", id = id, pvp = true, weapon = true, worn = slot ~= nil, equipSlot = eq,
+            use = slot ~= nil and C_Item.GetItemSpell(id) ~= nil,
+            backID = normID, backText = backText,
+            swapText = slot and backText or ("/equipslot %d item:%d"):format(eq, id) }
     end
+    -- The PvP bar's clicks (the user, 2026-11-20: "right click swaps the item with what slot it goes in, left click
+    -- uses the item if its usable"): the button always shows the PvP piece itself.
+    --   left-click: use it (worn, with an on-use: a PvP trinket breaks free); otherwise nothing
+    --   right-click: worn = the piece it replaced (or your pick) back on; not worn = it on, in your pick's slot /
+    --   the slot it went to last time / where the game puts it
+    local use = slot ~= nil and C_Item.GetItemSpell(id) ~= nil
     if slot then
-        if have and C_Item.GetItemSpell(id) then
-            -- worn with an on-use (PvP trinket): left-click still uses it, right-click puts the old piece back
-            return { kind = "item", id = id, back = back, backSlot = slot, backStr = backStr }
-        elseif have then
-            -- worn, nothing to use: the button shows the old piece and puts it back (armor: out of combat)
-            return { kind = "item", id = back, swapFor = id, equipSlot = slot, equipStr = backStr }
-        end
-        return { kind = "item", id = id }
+        return { kind = "item", id = id, pvp = true, worn = true, use = use, backID = have and back or nil,
+            backSlot = slot, swapText = have and EquipText(slot, backStr) or nil }
     end
-    -- not worn: one click puts it on, in the slot it went to last time (trinkets, rings)
     local twoSlot = TwoSlot(id)
-    return { kind = "item", id = id, equipSlot = twoSlot and rec and rec.slot or nil }
+    local es = pickedSlot or (twoSlot and rec and rec.slot) or nil
+    return { kind = "item", id = id, pvp = true, worn = false, equipSlot = es,
+        swapText = es and ("/equipslot %d item:%d"):format(es, id) or ("/equip item:%d"):format(id) }
+end
+
+-- Choosing what a PvP piece trades places with (the user, 2026-11-20: "i have no way to swap out that spot ...
+-- Smotts compass which i would swap out with the golden banana, the mark of the chosen gets swapped out with
+-- carrot ... in some bgs i would not use a mount so i would use something other than carrot").
+-- Shift+right-click a PvP gear button: every piece in your bags or worn that fits the same slot, plus
+-- "whatever it pushes off" (the automatic way), plus removing it from the bar.
+-- VoidBarsCharDB.pvpBack[id].picked = true keeps the pick: swaps never overwrite it.
+local function SlotGroup(id)
+    local loc = id and select(4, C_Item.GetItemInfoInstant(id))
+    if not loc or loc == "" then return nil end
+    if WEAPON_SLOT[loc] then return "w" .. WEAPON_SLOT[loc] end
+    if loc == "INVTYPE_ROBE" then return "INVTYPE_CHEST" end
+    return loc
+end
+
+-- pieces that could trade places with item id: { id, link, str }, bags first, then worn; one per exact copy
+function VB.PvPPartners(id)
+    local group, out, seen = SlotGroup(id), {}, {}
+    if not group then return out end
+    local function add(link)
+        local pid, str = LinkID(link), ItemString(link)
+        if pid and pid ~= id and str and not seen[str] and SlotGroup(pid) == group then
+            seen[str] = true
+            out[#out + 1] = { id = pid, link = link, str = str }
+        end
+    end
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        for s = 1, C_Container.GetContainerNumSlots(bag) do
+            local info = C_Container.GetContainerItemInfo(bag, s)
+            if info and info.hyperlink then add(info.hyperlink) end
+        end
+    end
+    for slot = 1, 19 do add(GetInventoryItemLink("player", slot)) end
+    return out
+end
+
+-- the pick: a partner (from VB.PvPPartners) or nil = back to the automatic way
+function VB.SetPvPPartner(id, p)
+    local back = PvPBack()
+    local rec = back[id] or {}
+    back[id] = rec
+    if p then
+        rec.id, rec.str, rec.picked = p.id, p.str, true
+        -- worn right now: the off-hand this piece pushed off stays recorded (no equip event would bring it back);
+        -- not worn: the next swap records it (Codex)
+        if not SlotOfEquipped(id) then rec.off, rec.offStr = nil, nil end
+        -- the pick was that off-hand (dual wield): it goes back to the main hand only (Codex)
+        if rec.offStr and rec.offStr == rec.str then rec.off, rec.offStr = nil, nil end
+        -- the pick's slot only when this piece fits there (a one-hander in the off-hand: not a two-hander's; Codex)
+        local ps = SlotOfEquipped(p.id)
+        if ps and FitsSlot(select(4, C_Item.GetItemInfoInstant(id)), ps) then rec.slot = ps end
+    else
+        rec.picked = nil
+    end
+    VB:RunOutOfCombat("smartrebuild", function() VB:RebuildSmartBars() end)
+end
+
+function VB.PvPPartnerOf(id)
+    local rec = PvPBack()[id]
+    return rec and rec.picked and rec.id or nil
 end
 
 local gearEv = CreateFrame("Frame")
@@ -1090,6 +1204,14 @@ function Smart:UpdateVisual()
     if not e then return end
     self.Count:SetText("")
     self.vbPlus:SetShown(e.kind == "drop")
+    -- PvP gear you're wearing: a small green corner, so you see which way a right-click goes
+    if e.pvp and e.worn and not self.vbWorn then
+        self.vbWorn = self:CreateTexture(nil, "OVERLAY")
+        self.vbWorn:SetColorTexture(0.2, 1, 0.3, 0.9)
+        self.vbWorn:SetSize(6, 6)
+        self.vbWorn:SetPoint("TOPRIGHT", -2, -2)
+    end
+    if self.vbWorn then self.vbWorn:SetShown(e.pvp and e.worn or false) end
     if e.kind == "drop" then
         self.icon:SetTexture(nil)
         self.cooldown:Clear()
@@ -1165,8 +1287,15 @@ function Smart:Assign(e)
     if mountID then
         self:SetAttribute("type", "macro")
         self:SetAttribute("macrotext", ("/run C_MountJournal.SummonByID(%d)"):format(mountID))
+    elseif e.kind == "item" and e.pvp then
+        -- PvP gear (VB.PvPEntry): left = use it (worn, with an on-use), right = swap it in / out. A missing action
+        -- is "vbnoop": with no type2 the right button would fall back to the left one (secure template rule)
+        self:SetAttribute("type", e.use and "item" or "vbnoop")
+        self:SetAttribute("item", e.use and ("item:" .. e.id) or nil)
+        self:SetAttribute("type2", e.swapText and "macro" or "vbnoop")
+        self:SetAttribute("macrotext2", e.swapText)
     elseif e.kind == "item" and e.equipSlot then
-        -- gear into one exact slot (PvP bar: the slot it went to / the slot to put the old piece back in)
+        -- gear into one exact slot (the profession bar's swaps)
         -- (equipStr: the exact copy, suffix and enchant included)
         self:SetAttribute("type", "macro")
         self:SetAttribute("macrotext", EquipText(e.equipSlot, e.equipStr or ("item:" .. e.id)))
@@ -1200,6 +1329,12 @@ function Smart:Assign(e)
         self:SetAttribute("house-plot-id", VB.house.plotID)
     end
     self:UpdateVisual()
+end
+
+-- the PvP item a PvP bar button stands for (a worn piece without an on-use shows its partner: e.swapFor)
+local function PvPItemOf(e)
+    local id = e and e.kind == "item" and (e.swapFor or e.id)
+    return id and C_Item.IsEquippableItem(id) and VB.IsPvPItem(id) and id or nil
 end
 
 local function ShowTooltip(self)
@@ -1244,20 +1379,32 @@ local function ShowTooltip(self)
     if e.swapFor then
         GameTooltip:AddLine(("Click: put this back on (you're wearing %s)"):format(
             C_Item.GetItemNameByID(e.swapFor) or "the other piece"), 0.4, 1, 0.4, true)
-    elseif e.back then
-        GameTooltip:AddLine(("Right-click: put %s back on"):format(C_Item.GetItemNameByID(e.back) or "your old piece"),
-            0.4, 1, 0.4, true)
-    elseif e.weapon then
-        GameTooltip:AddLine("Click: put it on", 0.4, 1, 0.4)
-        if e.backText then
-            GameTooltip:AddLine(("Right-click: %s back on (in combat too)"):format(
-                (e.backID and C_Item.GetItemNameByID(e.backID)) or "your own weapon"), 0.4, 1, 0.4, true)
+    elseif e.pvp then
+        if e.use then GameTooltip:AddLine("Left-click: use it", 0.4, 1, 0.4) end
+        local backName = e.backID and C_Item.GetItemNameByID(e.backID)
+        if e.worn and e.swapText then
+            GameTooltip:AddLine(("Right-click: put %s back on"):format(backName or "your own piece"), 0.4, 1, 0.4, true)
+        elseif e.worn then
+            GameTooltip:AddLine("Wearing it. Nothing to swap back yet: Shift+Right-click to pick what it swaps with",
+                0.8, 0.8, 0.8, true)
+        else
+            GameTooltip:AddLine("Right-click: put it on", 0.4, 1, 0.4)
         end
-    elseif bar.def.key == "pvp" and e.kind == "item" and not C_Item.IsEquippedItem(e.id)
-        and C_Item.IsEquippableItem(e.id) then
-        GameTooltip:AddLine("Click: put it on (click again to put back what it replaced)", 0.4, 1, 0.4, true)
+        if not e.weapon then
+            GameTooltip:AddLine("Gear swaps only out of combat (the game's rule); weapons swap in combat too",
+                0.6, 0.6, 0.6, true)
+        end
     end
-    if bar.def.curated then
+    local pvpID = bar.def.key == "pvp" and PvPItemOf(e)
+    if pvpID then
+        local partner = VB.PvPPartnerOf(pvpID)
+        if partner then
+            GameTooltip:AddLine(("Swaps with %s (your pick)"):format(C_Item.GetItemNameByID(partner) or "your pick"),
+                0.4, 0.8, 1, true)
+        end
+        GameTooltip:AddLine("Shift+Right-click: choose what it swaps with, or remove it", 0.6, 0.6, 0.6)
+        GameTooltip:AddLine("Drag a mount, toy, item, spell or macro here to add it", 0.6, 0.6, 0.6)
+    elseif bar.def.curated then
         GameTooltip:AddLine(e.curated and ("Shift+Right-click: remove from the " .. bar.def.label:lower() .. " bar")
             or "Shift+Right-click: hide", 0.6, 0.6, 0.6)
         GameTooltip:AddLine("Drag a mount, toy, item, spell or macro here to add it", 0.6, 0.6, 0.6)
@@ -1292,6 +1439,46 @@ local function RightClick(self, bar)
     VB:RebuildSmartBars()
 end
 
+-- Shift+right-click on PvP gear: pick what it trades places with, or remove it (VB.PvPPartners / SetPvPPartner)
+local function PvPPartnerMenu(self, bar, id)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then RightClick(self, bar) return end
+    MenuUtil.CreateContextMenu(self, function(_, root)
+        root:CreateTitle((C_Item.GetItemNameByID(id) or "This piece") .. " swaps with:")
+        local cur = VB.PvPPartnerOf(id)
+        local curStr = cur and PvPBack()[id].str
+        local list = VB.PvPPartners(id)
+        local function pick(p) VB.SetPvPPartner(id, p) end
+        for _, p in ipairs(list) do
+            -- the exact copy (two of one name with different suffixes: only yours is marked; Codex)
+            local isIt = function() return cur == p.id and (curStr == nil or curStr == p.str) end
+            if root.CreateRadio then
+                root:CreateRadio(p.link, isIt, function() pick(p) end)
+            else
+                root:CreateButton((isIt() and "> " or "") .. p.link, function() pick(p) end)
+            end
+        end
+        if #list == 0 then
+            root:CreateTitle("|cff999999Nothing in your bags fits that slot|r")
+        end
+        local auto = "Whatever it pushes off (automatic)"
+        if root.CreateRadio then
+            root:CreateRadio(auto, function() return cur == nil end, function() pick(nil) end)
+        else
+            root:CreateButton((cur == nil and "> " or "") .. auto, function() pick(nil) end)
+        end
+        root:CreateDivider()
+        root:CreateButton("|cffff6060Remove from the PvP bar|r", function()
+            -- by the PvP item itself: a worn piece's button shows its partner, so the button's own entry
+            -- would only hide that
+            local pvp = CuratedList("pvp")
+            for i = #pvp, 1, -1 do
+                if pvp[i].kind == "item" and pvp[i].id == id then table.remove(pvp, i) end
+            end
+            VB:RunOutOfCombat("smartrebuild", function() VB:RebuildSmartBars() end)
+        end)
+    end)
+end
+
 local function CreateSmartButton(bar, i)
     local b = CreateFrame("CheckButton", "VoidBars" .. bar.def.key .. "Button" .. i, bar,
         "ActionButtonTemplate, SecureActionButtonTemplate")
@@ -1318,7 +1505,8 @@ local function CreateSmartButton(bar, i)
             -- clicking the "+" while holding something adds it, like dropping it
             if GetCursorInfo() then VB:AddCursorTo(bar.def.key, bar.def.label:lower()) end
         elseif button == "RightButton" and IsShiftKeyDown() then
-            RightClick(self, bar)
+            local pvpID = bar.def.key == "pvp" and PvPItemOf(self.entry)
+            if pvpID then PvPPartnerMenu(self, bar, pvpID) else RightClick(self, bar) end
         elseif self.entry.missing and self.vbMissingClick then
             -- a plain food / water you don't carry: the way to the nearest vendor that sells it (VoidGPS)
             -- (looked up now: the nearest one from where you stand, not where the bar was last built)
