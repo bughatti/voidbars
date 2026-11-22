@@ -4,7 +4,7 @@
 -- when dismounted"; picked: auto-detect + anything added by hand, part of VoidBars.
 --
 -- Riding gear = anything whose tooltip (enchants included) says "mount speed" or "riding skill", Mithril Spurs on
--- boots, Carrot on a Stick, plus items added in Options. Only bound items (no "this will bind" popup).
+-- boots, Carrot on a Stick, plus items added in Options. Any color, bound or not.
 -- Game rules: out of combat any gear swaps; in combat none of this runs (armor can't change in combat), so a
 -- dismount into a fight puts your pieces back the moment combat ends. A trinket put back on starts a 30 s
 -- cooldown, so the riding trinket goes in the slot WITHOUT an on-use trinket / PvP-bar item when it can.
@@ -99,6 +99,11 @@ function M:Forget(slot)
     if VoidBarsCharDB and VoidBarsCharDB.mountSaved then VoidBarsCharDB.mountSaved[slot] = nil end
 end
 
+-- Any riding piece goes on, bound or not, any color. The user, 2026-11-22: "blue, purple, white, none of it should
+-- matter, if it has the gloves enchant or boot riding skill it should be swapped". (It used to be bound pieces only;
+-- their Battered Leather Gloves / Boots, logged in game, are white and never bind, so they were skipped. Enchants and
+-- spurs bind gear anyway; a piece that would still bind on equip gets the game's own question once.)
+
 -- the riding pieces in your bags: { {link, bag, slot, equipLoc}, ... }
 local function bagPieces()
     local out = {}
@@ -109,8 +114,7 @@ local function bagPieces()
             if link and not IsSecret(link) then
                 local _, _, _, loc = C_Item.GetItemInfoInstant(link)
                 if loc and SLOTS[loc] and isRiding(link, function() return C_TooltipInfo.GetBagItem(bag, slot) end) then
-                    local okB, bound = pcall(C_Item.IsBound, ItemLocation:CreateFromBagAndSlot(bag, slot))
-                    if okB and bound then out[#out + 1] = { link = link, loc = loc } end
+                    out[#out + 1] = { link = link, loc = loc }
                 end
             end
         end
@@ -244,6 +248,7 @@ end
 local wasMounted, applyTicks = nil, 0
 function M:Tick()
     if not VoidBarsCharDB then return end
+    if VoidBarsCharDB._dbgMount then VoidBarsCharDB._dbgMount, VoidBarsCharDB._dbgMountOn = nil, nil end   -- 11-22 debug log
     local on = VB:Get("mountGear") ~= false
     local mounted = onGroundMount()
     if mounted ~= wasMounted then

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.4] — 2026-11-22
+
+- **Riding gear of any kind swaps.** Gloves with the riding enchant and boots with Mithril Spurs were skipped when they weren't bound (white gear never binds). Now any piece that gives mount speed goes on when you mount and comes off when you get down, whatever its color. Still never on a flight path.
+
 ## [1.3.3] — 2026-11-21
 
 - **Fixed on WoW Forever: per-character settings.** The game stopped telling addons your realm's name, so your character's own settings were no longer loaded or saved. They are again, from where they were saved before.

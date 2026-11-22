@@ -40,7 +40,7 @@ These fill themselves and never use one of your action slots:
 - **Shift + right-click** hides a button from a smart bar for good; "Show all again" in the options brings the automatic ones back (a button you dragged on yourself is removed, so drag it back to restore it)
 
 ### Riding gear
-- **On when you mount, off when you get down** — Carrot on a Stick, gloves with Riding Skill, boots with Mithril Spurs, anything that says mount speed, plus pieces you add in the options. Your own pieces go back when you dismount (knocked off into a fight: when combat ends). The riding trinket never takes the place of a trinket you can use. On by default; Options -> VoidBars to turn it off
+- **On when you mount, off when you get down** — Carrot on a Stick, gloves with Riding Skill, boots with Mithril Spurs, anything that says mount speed (any color, bound or not), plus pieces you add in the options. Only for your own mount: never on a flight path. Your own pieces go back when you dismount (knocked off into a fight: when combat ends). The riding trinket never takes the place of a trinket you can use. On by default; Options -> VoidBars to turn it off
 
 ### Keys and setup
 - **Keybind mode** — hover a button, press a key. Shift, Ctrl, Alt, mouse buttons and the wheel all work; Backspace clears; Esc finishes. Uses Blizzard's own keybindings, so your keys survive turning VoidBars off.
