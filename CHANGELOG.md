@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.6] — 2026-11-25
+
+- **Suggest cleans up better** (WoW Forever Hunter, and any class with a pet):
+  - Key 3 is only kept for your interrupt when your class has one. A Hunter's key 3 now gets a spell like any other key.
+  - Your pet's spells (Call, Revive, Mend, Dismiss Pet) stay on the Pets bar instead of also taking a combat key.
+  - Leftover copies on your keys come off: a spell that now sits on another key, or a button a VoidBars bar already shows (food on the Consumables bar, Call Pet on the Pets bar), or Tracking (on WoW Forever the minimap button has it).
+  - The plan now shows what each key keeps ("keeps Hornwood Recurve Bow") and what comes off, instead of "(empty)".
+
 ## [1.3.5] — 2026-11-25
 
 - **Lighter on your computer.** The smart bars (consumables, travel, professions) are rebuilt only when the items in your bags change, not after every fight, every loot or every weapon skill-up.

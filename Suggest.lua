@@ -431,6 +431,11 @@ function VB:ShownSlots()
     return slots
 end
 
+-- Tracking (Track Beasts, Find Herbs...): Blizzard's minimap button does it, so never a key.
+function VB.IsTracking(nm)
+    return type(nm) == "string" and (nm:find("^Track") or nm:find("Tracking$") or nm:find("^Find ") or nm:find("^Sense ")) ~= nil
+end
+
 -- The plan: { {slot=, key=, name=, id=}, ... }, the spells left over, VoidSequencer's
 -- spells, and the damage spells placed (not in the rotation). fresh = ignore where
 -- spells sit now.
@@ -442,10 +447,14 @@ function VB:BuildSuggestion(fresh)
     local fixed = seq and FIXED[SpecID()]
     if fixed then return FixedPlan(fixed, (self:HomePage() - 1) * 12), {}, skip, {} end
     local taken = {}   -- canonical ids already planned
+    -- spells a VoidBars smart bar already shows (the Pets bar's Call / Revive / Mend / Dismiss
+    -- Pet): one press, one place (the user's son's Hunter had them twice, 2026-11-17)
+    local onSmart = {}
+    for id in pairs(self.SmartBarIDs and self:SmartBarIDs("spell") or {}) do onSmart[Canon(id)] = true end
     local function usable(name)
         local id = name and KnownID(name)
         local c = Canon(id)
-        if not c or taken[c] or skip[c] then return nil end
+        if not c or taken[c] or skip[c] or onSmart[c] then return nil end
         taken[c] = true
         return id
     end
@@ -495,12 +504,13 @@ function VB:BuildSuggestion(fresh)
     end
     for _, nm in ipairs(def.list) do add(nm) end
     for _, nm in ipairs(TalentedActives()) do add(nm) end
-    if not seq then
+    if not seq or IS_FOREVER then
         -- WoW Forever: the class lists hold retail names, so the spellbook is the only source of a
-        -- Classic character's utility (Aspect of the Monkey): it gets the Shift row there too.
+        -- Classic character's utility (Aspect of the Monkey): it gets the Shift row there too,
+        -- with VoidSequencer on as well (what its rotation casts is skipped by `usable`).
         -- Tracking stays off the keys (Blizzard's minimap button does it).
         for _, nm in ipairs(SpellbookActives()) do
-            if not (IS_FOREVER and (nm:find("^Track") or nm:find("Tracking$") or nm:find("^Find ") or nm:find("^Sense "))) then
+            if not (IS_FOREVER and VB.IsTracking(nm)) then
                 add(nm, nil, not IS_FOREVER)
             end
         end
@@ -514,6 +524,9 @@ function VB:BuildSuggestion(fresh)
     -- keys: top row 2..7 (1..7 without VoidSequencer; 3 = interrupt) on the spec's home
     -- page, then Shift row 1..7 (bar 2 doesn't page, so it's the same in every form)
     local base = (self:HomePage() - 1) * 12
+    -- key 3 is the interrupt key only when you have one (a Forever Hunter has none: key 3 kept
+    -- whatever was on it, his bow, 2026-11-17); otherwise it's a normal key
+    local INTERRUPT_KEY = interrupt and INTERRUPT_KEY or -1
     local keys = {}
     for i = seq and 2 or 1, 7 do
         keys[#keys + 1] = { slot = base + i, cmd = "ACTIONBUTTON" .. i, fallback = tostring(i), top = true }
@@ -521,7 +534,7 @@ function VB:BuildSuggestion(fresh)
     for i = 1, 7 do
         keys[#keys + 1] = { slot = 60 + i, cmd = "MULTIACTIONBAR1BUTTON" .. i, fallback = "Shift-" .. i }
     end
-    local free = #keys - 1   -- minus the interrupt key
+    local free = #keys - (interrupt and 1 or 0)   -- minus the interrupt key
     local chosen = {}
     if seq then
         for i = 1, math.min(free, #queue) do chosen[queue[i].c] = queue[i] end
@@ -532,7 +545,7 @@ function VB:BuildSuggestion(fresh)
         for _, q in ipairs(queue) do
             if q.group == DAMAGE then dmg[#dmg + 1] = q else other[#other + 1] = q end
         end
-        local topFree, shiftFree = free - 7, 7
+        local topFree, shiftFree = free - 7, 7   -- (top row: 7 keys, 6 with an interrupt)
         for i = 1, math.min(#dmg, topFree + math.max(0, shiftFree - #other)) do chosen[dmg[i].c] = dmg[i] end
         for i = 1, math.min(#other, shiftFree + math.max(0, topFree - #dmg)) do chosen[other[i].c] = other[i] end
     end
@@ -622,6 +635,12 @@ function VB:ApplySuggestion(fresh)
         -- an empty suggestion cleared every key, 2026-11-16)
         ClearCursor()
     end
+    -- 2b) ...unless it's a copy of something that now has its own place: a spell the plan put on
+    -- another key, or a spell / item a smart bar shows (Pets bar, food on Consumables). The
+    -- son's Hunter kept Tough Jerky and Call Pet on his combat keys next to the same buttons
+    -- on the bars beside them (2026-11-17: "i click suggested to clean it up why is it so messy").
+    local tidied = 0
+    for slot in pairs(self:SuggestLeftovers(plan)) do PickupAction(slot); ClearCursor(); tidied = tidied + 1 end
     -- 3) VoidSequencer's spells off every shown bar
     local cleared = 0
     for _, slot in ipairs(self:ShownSlots()) do
@@ -634,18 +653,63 @@ function VB:ApplySuggestion(fresh)
     self:QueueFullUpdate()
     VoidBarsCharDB.suggestUsed = true   -- from now on, offer an update after talent changes
     local seqNote = SeqActive() and (", %d VoidSequencer spell(s) taken off your bars"):format(cleared) or ""
+    if tidied > 0 then seqNote = seqNote .. (", %d leftover(s) removed (a spell now on another key or on a VoidBars bar)"):format(tidied) end
     self:Print(("suggested layout applied: %d placed%s. Undo: Options -> profile \"Before suggested\" -> Restore."):format(placed, seqNote))
     if #extra > 0 then
         self:Print("didn't fit on the 14 keys: " .. table.concat(extra, ", ") .. " (drag any you want onto the Travel bar).")
     end
 end
 
+-- Keys the plan leaves alone that hold only a leftover: a spell the plan put on another key, or a
+-- spell / item a smart bar shows (Pets bar, food on Consumables), or tracking (Forever). The son's
+-- Hunter kept Tough Jerky and Call Pet on his combat keys next to the same buttons on the bars
+-- beside them (2026-11-17: "i click suggested to clean it up why is it so messy").
+-- Returns { [slot] = true }; Apply empties them and the preview says so.
+function VB:SuggestLeftovers(plan)
+    local planned, smartSpell, out = {}, {}, {}
+    for _, p in ipairs(plan) do if p.id then planned[Canon(p.id)] = true end end
+    for id in pairs(self.SmartBarIDs and self:SmartBarIDs("spell") or {}) do smartSpell[Canon(id)] = true end
+    local smartItem = self.SmartBarIDs and self:SmartBarIDs("item") or {}
+    for _, p in ipairs(plan) do
+        if not p.id and not p.macro then
+            local t, id = GetActionInfo(p.slot)
+            if not VB.IsSecret(t) and not VB.IsSecret(id) then
+                local c = SpellAt(p.slot)
+                if (c and (planned[c] or smartSpell[c]))
+                    or (c and IS_FOREVER and VB.IsTracking(C_Spell.GetSpellName(c)))
+                    or (t == "item" and id and smartItem[id]) then
+                    out[p.slot] = true
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- What sits on a key now, in words (the preview of a key the plan leaves alone)
+local function ActionWords(slot)
+    local t, id = GetActionInfo(slot)
+    if not t or VB.IsSecret(t) or VB.IsSecret(id) then return nil end
+    if t == "spell" then return C_Spell.GetSpellName(id) end
+    if t == "item" then return (C_Item.GetItemNameByID(id)) end
+    if t == "macro" then return GetActionText(slot) end
+    return nil
+end
+
 -- Preview text for the confirm popup.
 function VB:SuggestionText()
     local plan, extra, _, damage = self:BuildSuggestion()
+    local leftovers = self:SuggestLeftovers(plan)
     local lines = {}
     for _, p in ipairs(plan) do
-        lines[#lines + 1] = ("%s:  %s"):format(p.key, p.name or "|cff888888(empty)|r")
+        local what = p.name
+        if not what then
+            local now = ActionWords(p.slot)
+            -- a key with nothing suggested keeps what's on it (Apply), unless it's only a leftover
+            what = now and (leftovers[p.slot] and ("|cff888888(" .. now .. " comes off)|r") or ("|cff888888keeps " .. now .. "|r"))
+                or "|cff888888(empty)|r"
+        end
+        lines[#lines + 1] = ("%s:  %s"):format(p.key, what)
     end
     local text = table.concat(lines, "\n")
     if #extra > 0 then text = text .. "\n\n|cff888888Didn't fit: " .. table.concat(extra, ", ") .. "|r" end
