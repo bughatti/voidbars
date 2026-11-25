@@ -340,3 +340,27 @@ end
 function VB:CloseBarSettings()
     if win then win:Hide() end
 end
+
+-- Read-only hooks for the all-in-one VoidHub window (2026-11-24): the hub's per-bar page changes a bar exactly the
+-- way this window does (same Shape / ApplyLayout / ApplyShown, same layout setter). Nothing here changes this window.
+VB.BarSettingsHub = {
+    Shape = Shape, ApplyLayout = ApplyLayout, ApplyShown = ApplyShown,
+    SetLayout = function(bar, field, v)
+        local cfg = VB:BarConfig(bar.def.key)
+        if bar.def.kind ~= "smart" then
+            local cols, spacing = Shape(cfg, bar)
+            cfg.cols, cfg.spacing = cfg.cols or cols, cfg.spacing or spacing
+        end
+        cfg[field] = v
+        if field == "num" then cfg.numFixed = true end
+        ApplyLayout(bar)
+    end,
+    SetEnabled = function(bar, on)
+        VB:BarConfig(bar.def.key).enabled = on
+        if bar.def.kind == "smart" then ApplyLayout(bar) else ApplyShown(bar) end
+    end,
+    SetFade = function(bar, on)
+        VB:BarConfig(bar.def.key).fade = on
+        if not on then bar:SetAlpha(1) end
+    end,
+}

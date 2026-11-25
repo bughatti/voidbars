@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.5] — 2026-11-25
+
+- **Lighter on your computer.** The smart bars (consumables, travel, professions) are rebuilt only when the items in your bags change, not after every fight, every loot or every weapon skill-up.
+
 ## [1.3.4] — 2026-11-22
 
 - **Riding gear of any kind swaps.** Gloves with the riding enchant and boots with Mithril Spurs were skipped when they weren't bound (white gear never binds). Now any piece that gives mount speed goes on when you mount and comes off when you get down, whatever its color. Still never on a flight path.

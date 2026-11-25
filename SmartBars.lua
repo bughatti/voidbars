@@ -1805,7 +1805,35 @@ function VB:UpdateSmartVisuals()
 end
 
 local queued = false
+-- the item ids in your bags, sorted: same set = same smart bars (counts are UpdateSmartVisuals' job)
+local lastBagSig
+local function BagIDsSig()
+    local seen, ids = {}, {}
+    local C = C_Container
+    for bag = 0, (NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) do
+        for slot = 1, (C and C.GetContainerNumSlots(bag) or 0) do
+            local id = C.GetContainerItemID(bag, slot)
+            if id and not seen[id] then seen[id] = true; ids[#ids + 1] = id end
+        end
+    end
+    table.sort(ids)
+    return table.concat(ids, ",")
+end
+
+-- the professions you have and their ranks (weapon skills left out): same = same profession bar
+local lastProfSig
+local function ProfSig()
+    local parts = {}
+    for _, idx in pairs({ GetProfessions() }) do
+        local name, _, rank, max = GetProfessionInfo(idx)
+        parts[#parts + 1] = tostring(name) .. rank .. "/" .. max
+    end
+    table.sort(parts)
+    return table.concat(parts, ",")
+end
+
 local function QueueRebuild()
+    lastBagSig = nil   -- any rebuild for another reason: the next bag change compares afresh
     if queued then return end
     queued = true
     C_Timer.After(0.3, function() queued = false; VB:RebuildSmartBars() end)
@@ -1843,9 +1871,20 @@ ev:SetScript("OnEvent", function(_, event)
     if event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN"
         or event == "MOUNT_JOURNAL_USABILITY_CHANGED" then
         VB:UpdateSmartVisuals()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- perf pass round 2 (2026-11-25, measured: every fight's end rebuilt every smart bar, ~9 ms): a rebuild asked for
+        -- in combat already waits for its end (RunOutOfCombat); the end of a fight itself changes nothing on the bars
+        return
+    elseif event == "SKILL_LINES_CHANGED" then
+        -- weapon skill-ups ("Your skill in Bows has increased") fire this mid-fight: only a profession rank matters here
+        local sig = ProfSig()
+        if sig ~= lastProfSig then lastProfSig = sig; QueueRebuild() end
     elseif event == "BAG_UPDATE_DELAYED" then
         VB:UpdateSmartVisuals()   -- counts now
-        QueueRebuild()            -- membership (out of combat)
+        -- membership (out of combat), only when WHICH items you carry changed (perf pass 2026-11-24, measured: every
+        -- loot rebuilt every smart bar, 9 ms each; a bigger stack never changes what the bars hold)
+        local sig = BagIDsSig()
+        if sig ~= lastBagSig then QueueRebuild(); lastBagSig = sig end   -- after: QueueRebuild clears it (Codex Sol)
     else
         QueueRebuild()
     end
