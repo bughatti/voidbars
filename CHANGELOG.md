@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0] — 2026-11-28
+
+- **PvP setup swap.** With VoidSequencer, switching its key 1 mode to PvP swaps what's on keys 2-7 (your Stealth and form bars too), Shift 1-7 and your gear to your PvP setup; switching back to ST or AoE puts your dungeon setup back. The first time into a mode nothing moves: set it up, and the next switch saves it. Out of combat only: a switch mid-fight swaps when the fight ends.
+- **WoW Forever rogue in PvP:** Suggested spells on the Subtlety set keeps it short (Stealth, Kidney Shot, Vanish, Sprint, Evasion, Gouge, Blind, Kick on 3, Sap on your Stealth bar) and leaves the rest of the 14 keys empty, because key 1 does the rest. Group and dungeon tools (Feint, Expose Armor, traps) stay off that set.
+- **WoW Forever paladin:** Rebuke is your interrupt on key 3 (Hammer of Justice until you learn it), and long buffs (blessings, auras, Righteous Fury) stay off your 14 combat keys.
+- **The suggested-layout popup** only asks on a level-up while leveling, once per plan; never at max level or on talent changes.
+
 ## [1.3.7] — 2026-11-25
 
 - **VoidHub window (WoW Forever):** right-click the VoidHub minimap button (or type /vhub) for every Void addon in one window: quests, layers, gear, gold, professions, combat, dungeons and more, each drawn from its own addon, with a Start page for what to do right now. Addons you don't have show a screenshot and how to get them. Shift + right-click opens Copy settings from another character. It comes inside every Void addon: nothing extra to install.

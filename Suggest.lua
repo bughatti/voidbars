@@ -134,8 +134,60 @@ local FOREVER_INTERRUPT = {
     MAGE = { "Counterspell" },
     PRIEST = { "Silence" },
     WARLOCK = { "Spell Lock" },
-    PALADIN = {}, DRUID = {}, HUNTER = {},
+    -- WoW Forever's paladin has Rebuke (it's in its spell lines); without it Hammer of Justice (a stun) is the
+    -- interrupt (the user, 2026-11-26, tanking Vedi: "any interrupts should be on 1 through 7")
+    PALADIN = { "Rebuke", "Hammer of Justice" }, DRUID = {}, HUNTER = {},
 }
+
+-- Never on the 14 combat keys (the user, 2026-11-26: "you keep putting buffs that last an hour or 30 minutes on my
+-- Naga bars ... I don't need them on those bars", "I don't think things like buffs should be in the key bindings, I'd
+-- rather just put them in another bar"): long buffs for any class (10 minutes or more by the tooltip), and on WoW
+-- Forever the paladin's blessings, auras and Righteous Fury, plus Cleanse / Purify (they belong on the party
+-- frames' click casting). Wherever you put them yourself, they stay.
+-- WoW Forever paladin, most important first (the class list above holds retail names): the big defensive, the
+-- short ones and the heals on the top row; group help and the rest on Shift (the user, 2026-11-26, tanking Vedi)
+local FOREVER_LIST = {
+    PALADIN = { "Exorcism", "Hammer of Wrath", "Templar's Bulwark", "Divine Protection", "Lay on Hands", "Holy Light",
+        "Flash of Light", "Hammer of Justice", "Repentance", "Blessing of Protection", "Divine Shield",
+        "Blessing of Sacrifice", "Blessing of Freedom", "Seal of Wisdom", "Turn Undead", "Divine Intervention" },
+}
+
+-- WoW Forever Rogue on the Subtlety daggers set (Hemorrhage known; the user, 2026-11-27: "build the forever sub list
+-- for suggest"). Measured: the 32 level-60 Sub rogues in our battleground combat logs, what they cast by hand (key 1
+-- already casts Premeditation, Cheap Shot, Hemorrhage, Ghostly Strike, Shank, Eviscerate, Blood Fury). Ordered by how
+-- many of them used it (strong players breaking ties): Stealth 24, Kidney Shot 18, Vanish 16, Rupture 13, Sprint 12,
+-- Evasion 9, Slice and Dice 8, Gouge 6, Cold Blood 5 (4 of them strong), Blind 4, Preparation 3, Expose Armor 2,
+-- Feint 1. Kept in THIS order (not re-grouped by tooltip). Stealth-only openers go on the stealth page instead.
+-- Feint and Expose Armor left out (the user, 2026-11-27: "i dont need feint or anything group dungeon based on my
+-- bars"); the list is the whole set: no spellbook top-up after it, a spare key keeps what you put there.
+-- Trimmed (the user, 2026-11-28: "yes trim it", fewest buttons outside key 1): the must-haves only. Cold Blood is key
+-- 1's now; Rupture, Slice and Dice, Preparation, Garrote, Ambush, Distract are optional and left off, and the keys
+-- nothing is planned for are EMPTIED on this set (not kept).
+local FOREVER_SUB_ROGUE = { "Stealth", "Kidney Shot", "Vanish", "Sprint", "Evasion", "Gouge", "Blind" }
+-- off the keys of the Sub (PvP) set only: group / dungeon tools (threat drop, the armor debuff for the group, traps).
+-- The user: "i mean it from a pvp perspective, not all the time" -- the Combat (dungeon) set keeps them.
+local FOREVER_SUB_OFF = { ["Feint"] = true, ["Expose Armor"] = true, ["Disarm Trap"] = true, ["Detect Traps"] = true }
+-- keys 2-7 in Stealth (VoidBars pages a rogue's main bar to page 7 in real Stealth): Sap (6 players measured); key 3
+-- stays Kick so the interrupt is the same key in and out of Stealth; the rest of the stealth page is emptied.
+local FOREVER_SUB_STEALTH = { [2] = "Sap", [3] = "Kick" }   -- trimmed 2026-11-28: key 1 opens (Premeditation, Cheap Shot)
+local STEALTH_PAGE = 7
+
+local FOREVER_OFF_KEYS ={ ["Righteous Fury"] = true, ["Cleanse"] = true, ["Purify"] = true }
+local KEEP_BLESSINGS = { ["Blessing of Protection"] = true, ["Blessing of Freedom"] = true, ["Blessing of Sacrifice"] = true }
+local function OffKeys(id, name, class)
+    if IS_FOREVER and class == "PALADIN" and name then
+        if FOREVER_OFF_KEYS[name] or name:find(" Aura$") or name:find("^Greater Blessing") then return true end
+        if name:find("^Blessing of ") and not KEEP_BLESSINGS[name] then return true end
+    end
+    local data = C_TooltipInfo and C_TooltipInfo.GetSpellByID and C_TooltipInfo.GetSpellByID(id)
+    for _, l in ipairs(data and data.lines or {}) do
+        local t = (type(l.leftText) == "string" and not VB.IsSecret(l.leftText)) and l.leftText:lower() or ""
+        local n = t:match("for (%d+) min") or t:match("lasts (%d+) min") or t:match("(%d+) min duration")
+        if n and tonumber(n) >= 10 then return true end
+        if t:match("for (%d+) hour") or t:match("lasts (%d+) hour") then return true end
+    end
+    return false
+end
 
 -- Forever role (the spec API is a placeholder there and GetSpecializationRole doesn't
 -- exist): the group role, else a tank stance / form / aura. nil when unknown.
@@ -442,6 +494,16 @@ end
 function VB:BuildSuggestion(fresh)
     local _, class = UnitClass("player")
     local def = CLASS[class] or { list = {} }
+    if IS_FOREVER and FOREVER_LIST[class] then
+        def = { interrupt = def.interrupt, taunt = def.taunt, list = FOREVER_LIST[class] }
+    end
+    -- the Subtlety daggers set: the measured list, in its own order, plus the stealth page
+    -- only while VoidSequencer's PvP rotation runs key 1 (Codex 11-28: without it, or in dungeon mode, the trimmed
+    -- list would clear the keys that hold Hemorrhage and Eviscerate with nothing casting them)
+    local api = _G.VoidSequencerAPI
+    local subRogue = IS_FOREVER and class == "ROGUE" and KnownID("Hemorrhage") ~= nil and SeqActive()
+        and api and api.IsPvpMode and api.IsPvpMode() and true or false
+    if subRogue then def = { interrupt = def.interrupt, list = FOREVER_SUB_ROGUE, ordered = true } end
     local skip = RotationSpells()
     local seq = SeqActive()
     local fixed = seq and FIXED[SpecID()]
@@ -487,6 +549,7 @@ function VB:BuildSuggestion(fresh)
         local id = usable(nm)
         if not id then return end
         local name = C_Spell.GetSpellName(id) or nm
+        if OffKeys(id, name, class) then return end   -- long buffs, auras, dispels: another bar / the frames
         local g, rank
         local main = not seq and MainRank(id, name, role == "HEALER")
         if main then
@@ -497,14 +560,29 @@ function VB:BuildSuggestion(fresh)
         else
             g, rank = Classify(id, name)
         end
-        queue[#queue + 1] = { name = name, id = id, c = Canon(id), group = group or g, rank = rank or 0, order = #queue }
+        -- a given group (taunts, an ordered list) keeps its list order: no damage rank inside it (Codex 11-27: Rupture's
+        -- tooltip damage would have jumped it ahead of Stealth in the Sub rogue's measured order)
+        queue[#queue + 1] = { name = name, id = id, c = Canon(id), group = group or g, rank = group and 0 or (rank or 0), order = #queue }
     end
     if role == "TANK" then
         for _, nm in ipairs(def.taunt or {}) do add(nm, 0) end
     end
-    for _, nm in ipairs(def.list) do add(nm) end
+    -- the stealth page's openers: reserved first, so they don't also take a normal key (or show as "didn't fit")
+    local stealthPicks = {}
+    if subRogue and seq then
+        for i = 2, 7 do
+            local nm = FOREVER_SUB_STEALTH[i]
+            local id = nm and ((interrupt and nm == interrupt.name and interrupt.id) or usable(nm))
+            if id then stealthPicks[i] = { name = C_Spell.GetSpellName(id) or nm, id = id } end
+        end
+    end
+    -- an ordered list (the Sub rogue's) keeps its own order ahead of the tooltip groups
+    for _, nm in ipairs(def.list) do add(nm, def.ordered and 0.5 or nil) end
+    -- an ordered list (the Sub rogue's) is the whole set: no talent / spellbook top-up after it
+    if not def.ordered then
     for _, nm in ipairs(TalentedActives()) do add(nm) end
-    if not seq or IS_FOREVER then
+    end
+    if (not seq or IS_FOREVER) and not def.ordered then
         -- WoW Forever: the class lists hold retail names, so the spellbook is the only source of a
         -- Classic character's utility (Aspect of the Monkey): it gets the Shift row there too,
         -- with VoidSequencer on as well (what its rotation casts is skipped by `usable`).
@@ -581,8 +659,18 @@ function VB:BuildSuggestion(fresh)
     local plan, damage = {}, {}
     for _, k in ipairs(keys) do
         local p = (k.slot == base + INTERRUPT_KEY) and interrupt or pick[k.slot]
-        plan[#plan + 1] = { slot = k.slot, key = KeyText(k.cmd, k.fallback), name = p and p.name, id = p and p.id }
+        -- the Sub (PvP) set's trimmed list: a key nothing is planned for is emptied (the user: fewest buttons)
+        plan[#plan + 1] = { slot = k.slot, key = KeyText(k.cmd, k.fallback), name = p and p.name, id = p and p.id,
+            clear = (subRogue and not p) or nil }
         if p and p.group == DAMAGE then damage[#damage + 1] = p.name end
+    end
+    -- the rogue's stealth page (keys 2-7 in Stealth): Sap, Kick; the rest emptied
+    if subRogue and seq then
+        for i = 2, 7 do
+            local p = stealthPicks[i]
+            plan[#plan + 1] = { slot = (STEALTH_PAGE - 1) * 12 + i, key = KeyText("ACTIONBUTTON" .. i, tostring(i)) .. " (stealth)",
+                name = p and p.name, id = p and p.id, clear = (not p) or nil }
+        end
     end
     local extra = {}
     for _, q in ipairs(queue) do
@@ -630,6 +718,8 @@ function VB:ApplySuggestion(fresh)
                 PlaceAction(p.slot)
                 placed = placed + 1
             end
+        elseif p.clear and GetActionInfo(p.slot) then
+            PickupAction(p.slot)   -- the Sub (PvP) set's trimmed list: this key is meant to be empty
         end
         -- nothing suggested for this key: what's on it stays (it used to be emptied, which with
         -- an empty suggestion cleared every key, 2026-11-16)
@@ -675,7 +765,13 @@ function VB:SuggestLeftovers(plan)
             local t, id = GetActionInfo(p.slot)
             if not VB.IsSecret(t) and not VB.IsSecret(id) then
                 local c = SpellAt(p.slot)
+                local _, cls = UnitClass("player")
+                local nm = c and C_Spell.GetSpellName(c)
+                local api = _G.VoidSequencerAPI
+                local subPvp = IS_FOREVER and cls == "ROGUE" and KnownID("Hemorrhage") ~= nil and SeqActive()
+                    and api and api.IsPvpMode and api.IsPvpMode()
                 if (c and (planned[c] or smartSpell[c]))
+                    or (subPvp and nm and FOREVER_SUB_OFF[nm])   -- the PvP set: group / dungeon tools come off
                     or (c and IS_FOREVER and VB.IsTracking(C_Spell.GetSpellName(c)))
                     or (t == "item" and id and smartItem[id]) then
                     out[p.slot] = true
@@ -703,7 +799,10 @@ function VB:SuggestionText()
     local lines = {}
     for _, p in ipairs(plan) do
         local what = p.name
-        if not what then
+        if not what and p.clear then
+            local now = ActionWords(p.slot)
+            what = now and ("|cff888888(" .. now .. " comes off: left empty)|r") or "|cff888888(empty)|r"
+        elseif not what then
             local now = ActionWords(p.slot)
             -- a key with nothing suggested keeps what's on it (Apply), unless it's only a leftover
             what = now and (leftovers[p.slot] and ("|cff888888(" .. now .. " comes off)|r") or ("|cff888888keeps " .. now .. "|r"))
@@ -773,6 +872,17 @@ function VB:SuggestionChanges()
     return n
 end
 
+-- The plan as text (slot = spell / macro / empty): two equal signatures = nothing new to suggest.
+function VB:SuggestionSig()
+    local plan = self:BuildSuggestion()
+    local parts = {}
+    for _, p in ipairs(plan) do
+        parts[#parts + 1] = tostring(p.slot) .. "=" .. tostring(p.macro or (p.id and Canon(p.id)) or "")
+    end
+    table.sort(parts)
+    return table.concat(parts, ";")
+end
+
 -- After talents change (or a level-up teaches something new), WoW drops spells onto your
 -- bars and the plan shifts. On characters that use the suggested layout, offer the update
 -- once things settle -- never in combat, never on characters that don't use it.
@@ -786,22 +896,31 @@ do
         if not used then return end
         if InCombatLockdown() then waitCombat = true return end
         if StaticPopup_FindVisible and StaticPopup_FindVisible("VOIDBARS_SUGGEST") then return end
+        -- Only when the plan itself changed since we last offered it (the user, 2026-11-27: "voidbars suggested bar
+        -- layout keeps popping up when i enter in bgs"): WoW Forever fires the talent events on every battleground /
+        -- instance zone-in, and after "Not now" the keys still differ, so it asked again each time. Same talents and
+        -- spells = same plan = no question.
+        local sig = VB:SuggestionSig()
+        if sig == VoidBarsCharDB.suggestOffered then return end
         local n = VB:SuggestionChanges()
         if n > 0 then
+            VoidBarsCharDB.suggestOffered = sig
             VB:ShowSuggestion(("Your talents or spells changed -- %d key(s) don't match the suggested layout any more. Update them?"):format(n))
         end
     end
+    -- Only on a level-up while leveling (the user, 2026-11-27: "it should only popup on leveling and at max level
+    -- stop"). Talent / spec events no longer ask (WoW Forever fires them on every battleground zone-in); the
+    -- Suggest button still offers it any time.
     local ev = CreateFrame("Frame")
-    ev:RegisterEvent("TRAIT_CONFIG_UPDATED")
     ev:RegisterEvent("PLAYER_LEVEL_UP")
-    ev:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     ev:RegisterEvent("PLAYER_REGEN_ENABLED")
-    ev:SetScript("OnEvent", function(_, event, unit)
+    ev:SetScript("OnEvent", function(_, event, level)
         if event == "PLAYER_REGEN_ENABLED" then
             if not waitCombat then return end
             waitCombat = nil
-        elseif event == "PLAYER_SPECIALIZATION_CHANGED" and unit and unit ~= "player" then
-            return
+        else
+            local max = GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()
+            if max and (tonumber(level) or UnitLevel("player")) >= max then return end   -- max level: never asks
         end
         if not pending then pending = true; C_Timer.After(3, Check) end
     end)

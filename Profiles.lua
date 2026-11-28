@@ -177,6 +177,7 @@ local function Pickup(e)
 end
 
 VB.PickupEntry = Pickup   -- shared with Suggest.lua
+VB.DescribeSlot, VB.SameEntry = Describe, Same   -- shared with ModeSwap.lua
 
 local function Label(e)
     if not e then return "empty" end
